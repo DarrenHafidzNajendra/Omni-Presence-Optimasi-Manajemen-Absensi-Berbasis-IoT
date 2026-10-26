@@ -93,6 +93,46 @@
             </div>
         </section>
 
+        <section aria-labelledby="schedules-heading" class="space-y-4">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                    <h2 id="schedules-heading" class="text-lg font-semibold text-slate-950">Jadwal perkuliahan</h2>
+                    <p class="mt-1 text-sm text-slate-500">Jadwal teori dan praktikum untuk kelas ini.</p>
+                </div>
+                <a href="{{ route('course-sections.schedules.create', $courseSection) }}" class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/25">Tambah Jadwal</a>
+            </div>
+            <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                @if ($courseSection->schedules->isEmpty())
+                    <p class="px-5 py-6 text-sm text-slate-500 sm:px-8">Belum ada jadwal perkuliahan.</p>
+                @else
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-slate-200 text-left">
+                            <thead class="bg-slate-50">
+                                <tr>
+                                    <th class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Sesi</th>
+                                    <th class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Hari & Waktu</th>
+                                    <th class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Lokasi</th>
+                                    <th class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
+                                    <th class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @foreach ($courseSection->schedules as $schedule)
+                                    <tr>
+                                        <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-700"><span class="font-semibold capitalize text-slate-900">{{ $schedule->session_type }}</span><span class="block text-xs capitalize text-slate-500">{{ $schedule->delivery_mode }}</span></td>
+                                        <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-700">{{ [1 => 'Senin', 2 => 'Selasa', 3 => 'Rabu', 4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu', 7 => 'Minggu'][$schedule->day_of_week] ?? '-' }}<br>{{ substr((string) $schedule->starts_at, 0, 5) }} - {{ substr((string) $schedule->ends_at, 0, 5) }}</td>
+                                        <td class="max-w-xs break-all px-5 py-4 text-sm text-slate-700">{{ $schedule->delivery_mode === 'online' ? $schedule->meeting_url : $schedule->location }}</td>
+                                        <td class="px-5 py-4 text-sm"><span @class(['inline-flex rounded-full px-2.5 py-1 text-xs font-medium', 'bg-emerald-100 text-emerald-800' => $schedule->is_active, 'bg-red-100 text-red-800' => ! $schedule->is_active])>{{ $schedule->is_active ? 'Aktif' : 'Nonaktif' }}</span></td>
+                                        <td class="whitespace-nowrap px-5 py-4 text-sm"><a href="{{ route('course-sections.schedules.edit', [$courseSection, $schedule]) }}" class="font-semibold text-blue-700 hover:text-blue-900">Edit</a></td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+            </div>
+        </section>
+
         <section aria-labelledby="assign-lecturer-heading" class="space-y-4">
             <div>
                 <h2 id="assign-lecturer-heading" class="text-lg font-semibold text-slate-950">Tambah dosen pengampu</h2>

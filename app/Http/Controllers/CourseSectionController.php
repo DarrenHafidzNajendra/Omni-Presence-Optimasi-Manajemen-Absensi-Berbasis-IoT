@@ -66,6 +66,10 @@ class CourseSectionController extends Controller
                 ->with('user:id,name,nidn,is_active')
                 ->orderBy('teaching_type')
                 ->orderBy('id'),
+            'schedules' => fn ($query) => $query
+                ->orderBy('day_of_week')
+                ->orderBy('starts_at')
+                ->orderBy('id'),
         ]);
 
         return view('course-sections.show', [
