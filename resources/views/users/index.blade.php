@@ -83,6 +83,7 @@
                                 <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Nama</th>
                                 <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Identitas</th>
                                 <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Role</th>
+                                <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Aksi</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
@@ -108,6 +109,14 @@
                                         <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
                                             {{ $roles[$user->role ?? ''] ?? 'Belum ditentukan' }}
                                         </span>
+                                    </td>
+                                    <td class="whitespace-nowrap px-6 py-4">
+                                        <a
+                                            href="{{ route('users.edit', $user) }}"
+                                            class="inline-flex items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-500/15"
+                                        >
+                                            Edit
+                                        </a>
                                     </td>
                                 </tr>
                             @endforeach

@@ -64,6 +64,64 @@ class UserController extends Controller
             ->with('success', 'Pengguna berhasil ditambahkan.');
     }
 
+    public function edit(User $user): View
+    {
+        return view('users.edit', [
+            'user' => $user,
+            'roles' => UserRole::cases(),
+        ]);
+    }
+
+    public function update(Request $request, User $user): RedirectResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'role' => ['required', Rule::enum(UserRole::class)],
+            'email' => [
+                'exclude_unless:role,'.UserRole::Admin->value,
+                'required',
+                'email',
+                'max:255',
+                Rule::unique(User::class, 'email')->ignore($user),
+            ],
+            'nidn' => [
+                'exclude_unless:role,'.UserRole::Dosen->value,
+                'required',
+                'string',
+                'regex:/\A[0-9]{6}\z/',
+                Rule::unique(User::class, 'nidn')->ignore($user),
+            ],
+            'nim' => [
+                'exclude_unless:role,'.UserRole::Mahasiswa->value,
+                'required',
+                'string',
+                'regex:/\A[0-9]{10}\z/',
+                Rule::unique(User::class, 'nim')->ignore($user),
+            ],
+            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $role = $validated['role'];
+
+        $user->fill([
+            'name' => $validated['name'],
+            'email' => $role === UserRole::Admin->value ? $validated['email'] : null,
+            'nidn' => $role === UserRole::Dosen->value ? $validated['nidn'] : null,
+            'nim' => $role === UserRole::Mahasiswa->value ? $validated['nim'] : null,
+            'role' => $validated['role'],
+        ]);
+
+        if (! empty($validated['password'])) {
+            $user->password = Hash::make($validated['password']);
+        }
+
+        $user->save();
+
+        return redirect()
+            ->route('users.index')
+            ->with('success', 'Pengguna berhasil diperbarui.');
+    }
+
     public function index(Request $request): View
     {
         $filters = $request->validate([

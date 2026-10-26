@@ -168,7 +168,7 @@ class UserCreationTest extends TestCase
         ]);
 
         $response->assertSessionHasErrors('password');
-        $this->assertDatabaseMissing('users', ['nim' => 'NIM-001']);
+        $this->assertDatabaseMissing('users', ['nim' => '0123456789']);
     }
 
     public function test_password_must_contain_at_least_eight_characters(): void
@@ -184,7 +184,7 @@ class UserCreationTest extends TestCase
         ]);
 
         $response->assertSessionHasErrors('password');
-        $this->assertDatabaseMissing('users', ['nim' => 'NIM-002']);
+        $this->assertDatabaseMissing('users', ['nim' => '0123456789']);
     }
 
     /**
