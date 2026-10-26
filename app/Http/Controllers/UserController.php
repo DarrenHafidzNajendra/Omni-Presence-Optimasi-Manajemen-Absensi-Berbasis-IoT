@@ -72,6 +72,14 @@ class UserController extends Controller
         ]);
     }
 
+    public function show(User $user): View
+    {
+        return view('users.show', [
+            'user' => $user,
+            'roleLabel' => UserRole::tryFrom((string) $user->role)?->name ?? 'Belum ditentukan',
+        ]);
+    }
+
     public function update(Request $request, User $user): RedirectResponse
     {
         $validated = $request->validate([

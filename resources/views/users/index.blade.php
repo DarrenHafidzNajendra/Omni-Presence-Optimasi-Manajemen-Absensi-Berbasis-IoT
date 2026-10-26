@@ -111,12 +111,20 @@
                                         </span>
                                     </td>
                                     <td class="whitespace-nowrap px-6 py-4">
-                                        <a
-                                            href="{{ route('users.edit', $user) }}"
-                                            class="inline-flex items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-500/15"
-                                        >
-                                            Edit
-                                        </a>
+                                        <div class="flex items-center gap-2">
+                                            <a
+                                                href="{{ route('users.show', $user) }}"
+                                                class="inline-flex items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-500/15"
+                                            >
+                                                Detail
+                                            </a>
+                                            <a
+                                                href="{{ route('users.edit', $user) }}"
+                                                class="inline-flex items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-500/15"
+                                            >
+                                                Edit
+                                            </a>
+                                        </div>
                                     </td>
                                 </tr>
                             @endforeach
