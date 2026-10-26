@@ -1,0 +1,44 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('attendance_records', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('attendance_session_id')
+                ->constrained()
+                ->cascadeOnDelete();
+            $table->foreignId('student_id')
+                ->constrained('users')
+                ->cascadeOnDelete();
+            $table->enum('method', ['qr_code', 'face_recognition', 'manual']);
+            $table->enum('status', ['hadir', 'izin', 'sakit']);
+            $table->dateTime('checked_in_at')->nullable();
+            $table->foreignId('recorded_by')
+                ->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
+            $table->text('notes')->nullable();
+            $table->timestamps();
+
+            $table->unique(['attendance_session_id', 'student_id']);
+            $table->index(['student_id', 'status']);
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('attendance_records');
+    }
+};
