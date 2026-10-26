@@ -23,18 +23,41 @@
                     </span>
                 </a>
 
-                <nav aria-label="Navigasi utama">
-                    <a
-                        href="{{ route('dashboard') }}"
-                        @class([
-                            'rounded-lg px-3 py-2 text-sm font-semibold transition',
-                            'bg-blue-50 text-blue-700' => request()->routeIs('dashboard'),
-                            'text-slate-600 hover:bg-slate-100 hover:text-slate-900' => ! request()->routeIs('dashboard'),
-                        ])
-                        @if (request()->routeIs('dashboard')) aria-current="page" @endif
-                    >
-                        Dashboard
-                    </a>
+                <nav aria-label="Navigasi utama" class="flex items-center gap-2">
+                    @auth
+                        <a
+                            href="{{ route('dashboard') }}"
+                            @class([
+                                'rounded-lg px-3 py-2 text-sm font-semibold transition',
+                                'bg-blue-50 text-blue-700' => request()->routeIs('dashboard'),
+                                'text-slate-600 hover:bg-slate-100 hover:text-slate-900' => ! request()->routeIs('dashboard'),
+                            ])
+                            @if (request()->routeIs('dashboard')) aria-current="page" @endif
+                        >
+                            Dashboard
+                        </a>
+                        <form method="POST" action="{{ route('logout') }}">
+                            @csrf
+                            <button
+                                type="submit"
+                                class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                            >
+                                Keluar
+                            </button>
+                        </form>
+                    @else
+                        <a
+                            href="{{ route('login') }}"
+                            @class([
+                                'rounded-lg px-3 py-2 text-sm font-semibold transition',
+                                'bg-blue-50 text-blue-700' => request()->routeIs('login'),
+                                'text-slate-600 hover:bg-slate-100 hover:text-slate-900' => ! request()->routeIs('login'),
+                            ])
+                            @if (request()->routeIs('login')) aria-current="page" @endif
+                        >
+                            Masuk
+                        </a>
+                    @endauth
                 </nav>
             </div>
         </header>

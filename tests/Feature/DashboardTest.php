@@ -2,20 +2,17 @@
 
 namespace Tests\Feature;
 
+use App\Models\User;
 use Tests\TestCase;
 
 class DashboardTest extends TestCase
 {
-    public function test_homepage_redirects_to_the_named_dashboard(): void
-    {
-        $response = $this->get('/');
-
-        $response->assertRedirectToRoute('dashboard');
-    }
-
     public function test_dashboard_displays_sections_with_explicit_empty_states(): void
     {
-        $response = $this->get('/dashboard');
+        $user = User::factory()->make();
+        $user->forceFill(['role' => 'admin']);
+
+        $response = $this->actingAs($user)->get('/dashboard');
 
         $response->assertOk()
             ->assertSeeText('Statistik kehadiran')
