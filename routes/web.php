@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\CourseController;
 use App\Http\Controllers\CourseSectionController;
+use App\Http\Controllers\CourseSectionLecturerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -42,6 +43,7 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::get('/course-sections/{courseSection}/edit', [CourseSectionController::class, 'edit'])->name('course-sections.edit');
     Route::put('/course-sections/{courseSection}', [CourseSectionController::class, 'update'])->name('course-sections.update');
     Route::patch('/course-sections/{courseSection}/status', [CourseSectionController::class, 'updateStatus'])->name('course-sections.status');
+    Route::post('/course-sections/{courseSection}/lecturers', [CourseSectionLecturerController::class, 'store'])->name('course-sections.lecturers.store');
 
     Route::get('/users/create', [UserController::class, 'create'])->name('users.create');
     Route::post('/users', [UserController::class, 'store'])->name('users.store');

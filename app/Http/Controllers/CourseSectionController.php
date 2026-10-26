@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Course;
 use App\Models\CourseSection;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\RedirectResponse;
@@ -59,10 +60,22 @@ class CourseSectionController extends Controller
 
     public function show(CourseSection $courseSection): View
     {
-        $courseSection->load('course:id,code,name');
+        $courseSection->load([
+            'course:id,code,name',
+            'lecturers' => fn ($query) => $query
+                ->with('user:id,name,nidn,is_active')
+                ->orderBy('teaching_type')
+                ->orderBy('id'),
+        ]);
 
         return view('course-sections.show', [
             'courseSection' => $courseSection,
+            'lecturerOptions' => User::query()
+                ->where('role', 'dosen')
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->orderBy('id')
+                ->get(['id', 'name', 'nidn']),
         ]);
     }
 

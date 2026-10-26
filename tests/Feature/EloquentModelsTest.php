@@ -33,7 +33,10 @@ class EloquentModelsTest extends TestCase
             'semester' => 'ganjil',
             'is_active' => true,
         ]);
-        $lecturer = User::factory()->create(['email' => 'lecturer@example.test']);
+        $lecturer = User::factory()->create([
+            'email' => 'lecturer@example.test',
+            'role' => 'dosen',
+        ]);
         $student = User::factory()->create(['email' => 'student@example.test']);
         $assignment = CourseSectionLecturer::query()->create([
             'course_section_id' => $section->id,
@@ -89,6 +92,8 @@ class EloquentModelsTest extends TestCase
         $this->assertSame($session->id, $section->attendanceSessions->first()->id);
         $this->assertSame($section->id, $assignment->courseSection->id);
         $this->assertSame($lecturer->id, $assignment->user->id);
+        $this->assertSame($assignment->id, $lecturer->courseSectionLecturers->first()->id);
+        $this->assertSame($section->id, $lecturer->courseSectionLecturers->first()->courseSection->id);
         $this->assertSame($section->id, $enrollment->courseSection->id);
         $this->assertSame($student->id, $enrollment->student->id);
         $this->assertSame($section->id, $schedule->courseSection->id);
