@@ -23,7 +23,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         RateLimiter::for('login', function (Request $request): Limit {
-            $key = hash('sha256', strtolower((string) $request->input('email', '')).'|'.$request->ip());
+            $key = hash('sha256', strtolower((string) $request->input('role', '')).'|'
+                .strtolower((string) $request->input('identity', '')).'|'.$request->ip());
 
             return Limit::perMinute(5)->by($key);
         });

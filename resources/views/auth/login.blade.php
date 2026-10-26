@@ -15,20 +15,42 @@
                 @csrf
 
                 <div class="space-y-2">
-                    <label for="email" class="block text-sm font-medium text-slate-700">Alamat email</label>
+                    <label for="role" class="block text-sm font-medium text-slate-700">Masuk sebagai</label>
+                    <select
+                        id="role"
+                        name="role"
+                        required
+                        class="block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                        @error('role') aria-invalid="true" aria-describedby="role-error" @enderror
+                    >
+                        @foreach ($roles as $role)
+                            <option value="{{ $role->value }}" @selected(old('role', \App\Enums\UserRole::Admin->value) === $role->value)>
+                                {{ $role->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('role')
+                        <p id="role-error" class="text-sm text-red-700">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div class="space-y-2">
+                    <label id="identity-label" for="identity" class="block text-sm font-medium text-slate-700">Alamat email</label>
                     <input
-                        id="email"
-                        name="email"
+                        id="identity"
+                        name="identity"
                         type="email"
-                        value="{{ old('email') }}"
+                        value="{{ old('identity') }}"
+                        placeholder="nama@contoh.com"
+                        inputmode="email"
                         autocomplete="username"
                         required
                         autofocus
                         class="block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
-                        @error('email') aria-invalid="true" aria-describedby="email-error" @enderror
+                        @error('identity') aria-invalid="true" aria-describedby="identity-error" @enderror
                     >
-                    @error('email')
-                        <p id="email-error" class="text-sm text-red-700">{{ $message }}</p>
+                    @error('identity')
+                        <p id="identity-error" class="text-sm text-red-700">{{ $message }}</p>
                     @enderror
                 </div>
 
@@ -69,4 +91,26 @@
             </form>
         </div>
     </div>
+
+    <script>
+        const roleInput = document.getElementById('role');
+        const identityLabel = document.getElementById('identity-label');
+        const identityInput = document.getElementById('identity');
+        const identitySettings = {
+            admin: { label: 'Alamat email', placeholder: 'nama@contoh.com', type: 'email', inputmode: 'email' },
+            dosen: { label: 'NIDN', placeholder: 'Masukkan NIDN', type: 'text', inputmode: 'text' },
+            mahasiswa: { label: 'NIM', placeholder: 'Masukkan NIM', type: 'text', inputmode: 'text' },
+        };
+
+        function updateIdentityField() {
+            const settings = identitySettings[roleInput.value];
+            identityLabel.textContent = settings.label;
+            identityInput.placeholder = settings.placeholder;
+            identityInput.type = settings.type;
+            identityInput.inputMode = settings.inputmode;
+        }
+
+        roleInput.addEventListener('change', updateIdentityField);
+        updateIdentityField();
+    </script>
 @endsection

@@ -36,6 +36,19 @@
                         >
                             Dashboard
                         </a>
+                        @if (auth()->user()->role === \App\Enums\UserRole::Admin->value)
+                            <a
+                                href="{{ route('users.index') }}"
+                                @class([
+                                    'rounded-lg px-3 py-2 text-sm font-semibold transition',
+                                    'bg-blue-50 text-blue-700' => request()->routeIs('users.*'),
+                                    'text-slate-600 hover:bg-slate-100 hover:text-slate-900' => ! request()->routeIs('users.*'),
+                                ])
+                                @if (request()->routeIs('users.*')) aria-current="page" @endif
+                            >
+                                Pengguna
+                            </a>
+                        @endif
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
                             <button

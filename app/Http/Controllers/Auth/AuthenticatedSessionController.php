@@ -7,46 +7,62 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class AuthenticatedSessionController extends Controller
 {
     public function create(): View
     {
-        return view('auth.login');
+        return view('auth.login', [
+            'roles' => UserRole::cases(),
+        ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
         $credentials = $request->validate([
-            'email' => ['required', 'string', 'email', 'max:255'],
+            'role' => ['required', Rule::enum(UserRole::class)],
+            'identity' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::when($request->input('role') === UserRole::Admin->value, ['email']),
+            ],
             'password' => ['required', 'string'],
             'remember' => ['sometimes', 'boolean'],
         ]);
 
+        $role = UserRole::from($credentials['role']);
+        $identityColumn = match ($role) {
+            UserRole::Admin => 'email',
+            UserRole::Dosen => 'nidn',
+            UserRole::Mahasiswa => 'nim',
+        };
+
         if (! Auth::attempt(
             [
-                'email' => $credentials['email'],
+                $identityColumn => $credentials['identity'],
+                'role' => $role->value,
                 'password' => $credentials['password'],
             ],
             $request->boolean('remember'),
         )) {
             return back()
-                ->withErrors(['email' => 'Email atau kata sandi tidak valid.'])
-                ->onlyInput('email');
+                ->withErrors(['identity' => 'Peran, identitas, atau kata sandi tidak valid.'])
+                ->onlyInput('role', 'identity');
         }
 
-        $user = $request->user();
-        $role = $user === null ? null : UserRole::tryFrom((string) $user->role);
+        $userRole = UserRole::tryFrom((string) $request->user()?->role);
 
-        if ($role === null) {
+        if ($userRole !== $role) {
             Auth::logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
             return back()
-                ->withErrors(['email' => 'Email atau kata sandi tidak valid.'])
-                ->onlyInput('email');
+                ->withErrors(['identity' => 'Peran, identitas, atau kata sandi tidak valid.'])
+                ->onlyInput('role', 'identity');
         }
 
         $request->session()->regenerate();

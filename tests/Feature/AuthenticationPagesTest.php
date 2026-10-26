@@ -11,8 +11,12 @@ class AuthenticationPagesTest extends TestCase
         $response = $this->get('/login');
 
         $response->assertOk()
-            ->assertSee('name="email"', false)
+            ->assertSee('name="role"', false)
+            ->assertSee('name="identity"', false)
             ->assertSee('name="password"', false)
+            ->assertSee('value="admin"', false)
+            ->assertSee('value="dosen"', false)
+            ->assertSee('value="mahasiswa"', false)
             ->assertDontSee('register');
     }
 
@@ -20,7 +24,7 @@ class AuthenticationPagesTest extends TestCase
     {
         $response = $this->post('/login', []);
 
-        $response->assertSessionHasErrors(['email', 'password']);
+        $response->assertSessionHasErrors(['role', 'identity', 'password']);
         $this->assertGuest();
     }
 
