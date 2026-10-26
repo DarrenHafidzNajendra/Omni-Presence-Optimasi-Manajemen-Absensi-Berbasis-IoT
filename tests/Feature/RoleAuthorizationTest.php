@@ -26,8 +26,7 @@ class RoleAuthorizationTest extends TestCase
     #[DataProvider('supportedRoles')]
     public function test_dashboard_accepts_each_supported_role(string $role): void
     {
-        $user = User::factory()->make();
-        $user->forceFill(['role' => $role]);
+        $user = User::factory()->create(['role' => $role]);
 
         $response = $this->actingAs($user)->get('/dashboard');
 
@@ -36,8 +35,7 @@ class RoleAuthorizationTest extends TestCase
 
     public function test_dashboard_forbids_users_with_an_unsupported_role(): void
     {
-        $user = User::factory()->make();
-        $user->forceFill(['role' => 'operator']);
+        $user = User::factory()->create(['role' => 'operator']);
 
         $response = $this->actingAs($user)->get('/dashboard');
 

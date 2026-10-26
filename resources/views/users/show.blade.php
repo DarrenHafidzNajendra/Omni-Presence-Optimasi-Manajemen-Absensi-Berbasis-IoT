@@ -36,6 +36,18 @@
                     </dd>
                 </div>
                 <div class="grid gap-2 px-5 py-4 sm:grid-cols-[12rem_minmax(0,1fr)] sm:gap-6 sm:px-8">
+                    <dt class="text-sm font-medium text-slate-500">Status akun</dt>
+                    <dd>
+                        <span @class([
+                            'inline-flex rounded-full px-2.5 py-1 text-xs font-medium',
+                            'bg-emerald-100 text-emerald-800' => $user->is_active,
+                            'bg-red-100 text-red-800' => ! $user->is_active,
+                        ])>
+                            {{ $user->is_active ? 'Aktif' : 'Nonaktif' }}
+                        </span>
+                    </dd>
+                </div>
+                <div class="grid gap-2 px-5 py-4 sm:grid-cols-[12rem_minmax(0,1fr)] sm:gap-6 sm:px-8">
                     <dt class="text-sm font-medium text-slate-500">{{ $identity['label'] }}</dt>
                     <dd class="break-all text-sm text-slate-900">{{ $identity['value'] ?? 'Belum ditentukan' }}</dd>
                 </div>

@@ -13,8 +13,7 @@ class DashboardTest extends TestCase
 
     public function test_dashboard_displays_sections_with_explicit_empty_states(): void
     {
-        $user = User::factory()->make();
-        $user->forceFill(['role' => 'admin']);
+        $user = User::factory()->create(['role' => 'admin']);
 
         $response = $this->actingAs($user)->get('/dashboard');
 

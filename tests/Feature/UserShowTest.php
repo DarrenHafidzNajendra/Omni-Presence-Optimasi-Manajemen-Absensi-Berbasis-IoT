@@ -110,4 +110,18 @@ class UserShowTest extends TestCase
 
         $response->assertNotFound();
     }
+
+    public function test_user_details_display_the_account_status(): void
+    {
+        $user = User::factory()->create([
+            'is_active' => false,
+            'role' => UserRole::Mahasiswa->value,
+            'nim' => '0012345678',
+        ]);
+        $admin = User::factory()->create(['role' => UserRole::Admin->value]);
+
+        $response = $this->actingAs($admin)->get(route('users.show', $user));
+
+        $response->assertOk()->assertSeeText('Status akun')->assertSeeText('Nonaktif');
+    }
 }

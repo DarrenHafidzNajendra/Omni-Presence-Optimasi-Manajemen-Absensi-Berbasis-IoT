@@ -26,6 +26,12 @@
             </div>
         @endif
 
+        @error('is_active')
+            <div role="alert" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">
+                {{ $message }}
+            </div>
+        @enderror
+
         <section aria-label="Pencarian dan filter pengguna" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <form method="GET" action="{{ route('users.index') }}" class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_14rem_auto] sm:items-end">
                 <div class="space-y-2">
@@ -83,6 +89,7 @@
                                 <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Nama</th>
                                 <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Identitas</th>
                                 <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Role</th>
+                                <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
                                 <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Aksi</th>
                             </tr>
                         </thead>
@@ -111,7 +118,16 @@
                                         </span>
                                     </td>
                                     <td class="whitespace-nowrap px-6 py-4">
-                                        <div class="flex items-center gap-2">
+                                        <span @class([
+                                            'inline-flex rounded-full px-2.5 py-1 text-xs font-medium',
+                                            'bg-emerald-100 text-emerald-800' => $user->is_active,
+                                            'bg-red-100 text-red-800' => ! $user->is_active,
+                                        ])>
+                                            {{ $user->is_active ? 'Aktif' : 'Nonaktif' }}
+                                        </span>
+                                    </td>
+                                    <td class="whitespace-nowrap px-6 py-4">
+                                        <div class="flex flex-wrap items-center gap-2">
                                             <a
                                                 href="{{ route('users.show', $user) }}"
                                                 class="inline-flex items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-500/15"
@@ -124,6 +140,25 @@
                                             >
                                                 Edit
                                             </a>
+                                            @if (auth()->id() === $user->id && $user->is_active)
+                                                <span class="text-xs text-slate-500">Akun Anda</span>
+                                            @else
+                                                <form
+                                                    method="POST"
+                                                    action="{{ route('users.status', $user) }}"
+                                                    onsubmit="{{ $user->is_active ? "return confirm('Nonaktifkan akun pengguna ini?')" : '' }}"
+                                                >
+                                                    @csrf
+                                                    @method('PATCH')
+                                                    <input type="hidden" name="is_active" value="{{ $user->is_active ? '0' : '1' }}">
+                                                    <button
+                                                        type="submit"
+                                                        class="inline-flex items-center justify-center rounded-lg border px-3 py-2 text-sm font-semibold transition focus:outline-none focus:ring-4 {{ $user->is_active ? 'border-red-300 text-red-700 hover:bg-red-50 focus:ring-red-500/15' : 'border-emerald-300 text-emerald-700 hover:bg-emerald-50 focus:ring-emerald-500/15' }}"
+                                                    >
+                                                        {{ $user->is_active ? 'Nonaktifkan' : 'Aktifkan' }}
+                                                    </button>
+                                                </form>
+                                            @endif
                                         </div>
                                     </td>
                                 </tr>

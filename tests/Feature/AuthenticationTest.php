@@ -56,6 +56,80 @@ class AuthenticationTest extends TestCase
         $this->assertGuest();
     }
 
+    #[DataProvider('roleIdentities')]
+    public function test_inactive_users_cannot_log_in_for_their_role(
+        UserRole $role,
+        string $identityColumn,
+        string $identity,
+    ): void {
+        $user = $this->createUserForRole($role, $identityColumn, $identity);
+        $user->is_active = false;
+        $user->save();
+
+        $response = $this->post(route('login'), [
+            'role' => $role->value,
+            'identity' => $identity,
+            'password' => 'password',
+        ]);
+
+        $response->assertSessionHasErrors('identity');
+        $this->assertGuest();
+    }
+
+    /**
+     * @return array<string, array{UserRole, string, string, UserRole, string}>
+     */
+    public static function inactiveRoleMismatches(): array
+    {
+        return [
+            'admin identity submitted as dosen' => [
+                UserRole::Admin,
+                'email',
+                'inactive-admin@example.com',
+                UserRole::Dosen,
+                'nidn',
+            ],
+            'dosen identity submitted as admin' => [
+                UserRole::Dosen,
+                'nidn',
+                'inactive-dosen@example.com',
+                UserRole::Admin,
+                'email',
+            ],
+            'mahasiswa identity submitted as admin' => [
+                UserRole::Mahasiswa,
+                'nim',
+                'inactive-mahasiswa@example.com',
+                UserRole::Admin,
+                'email',
+            ],
+        ];
+    }
+
+    #[DataProvider('inactiveRoleMismatches')]
+    public function test_inactive_users_cannot_log_in_with_another_selected_role(
+        UserRole $actualRole,
+        string $identityColumn,
+        string $identity,
+        UserRole $selectedRole,
+        string $selectedIdentityColumn,
+    ): void {
+        $user = $this->createUserForRole($actualRole, $identityColumn, $identity);
+        $user->forceFill([
+            $selectedIdentityColumn => $identity,
+            'is_active' => false,
+        ])->save();
+
+        $response = $this->post(route('login'), [
+            'role' => $selectedRole->value,
+            'identity' => $identity,
+            'password' => 'password',
+        ]);
+
+        $response->assertSessionHasErrors('identity');
+        $this->assertGuest();
+    }
+
     public function test_login_rejects_an_identity_submitted_under_a_different_role(): void
     {
         $user = $this->createUserForRole(UserRole::Dosen, 'nidn', 'SHARED-IDENTIFIER');

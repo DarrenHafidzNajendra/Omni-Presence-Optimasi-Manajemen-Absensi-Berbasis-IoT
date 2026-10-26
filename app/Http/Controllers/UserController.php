@@ -80,6 +80,30 @@ class UserController extends Controller
         ]);
     }
 
+    public function updateStatus(Request $request, User $user): RedirectResponse
+    {
+        $validated = $request->validate([
+            'is_active' => ['required', 'boolean'],
+        ]);
+
+        $isActive = (bool) $validated['is_active'];
+
+        if (! $isActive && $request->user()?->is($user)) {
+            return back()->withErrors([
+                'is_active' => 'Anda tidak dapat menonaktifkan akun sendiri.',
+            ]);
+        }
+
+        $user->is_active = $isActive;
+        $user->save();
+
+        return redirect()
+            ->route('users.index')
+            ->with('success', $isActive
+                ? 'Akun pengguna berhasil diaktifkan.'
+                : 'Akun pengguna berhasil dinonaktifkan.');
+    }
+
     public function update(Request $request, User $user): RedirectResponse
     {
         $validated = $request->validate([
@@ -141,7 +165,7 @@ class UserController extends Controller
         $selectedRole = $filters['role'] ?? null;
 
         $users = User::query()
-            ->select(['id', 'name', 'email', 'nidn', 'nim', 'role'])
+            ->select(['id', 'name', 'email', 'nidn', 'nim', 'role', 'is_active'])
             ->when($search !== '', function (Builder $query) use ($search): void {
                 $query->where(function (Builder $query) use ($search): void {
                     $query->where('name', 'like', "%{$search}%")

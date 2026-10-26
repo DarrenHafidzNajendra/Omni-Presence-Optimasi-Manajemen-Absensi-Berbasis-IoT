@@ -44,6 +44,7 @@ class AuthenticatedSessionController extends Controller
             [
                 $identityColumn => $credentials['identity'],
                 'role' => $role->value,
+                'is_active' => true,
                 'password' => $credentials['password'],
             ],
             $request->boolean('remember'),
