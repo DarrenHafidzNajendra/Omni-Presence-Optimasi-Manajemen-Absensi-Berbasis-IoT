@@ -15,6 +15,32 @@
             <p class="text-sm font-medium text-slate-500">{{ now()->format('d/m/Y') }}</p>
         </section>
 
+        @if ($userStatistics !== null)
+            <section aria-labelledby="users-heading" class="space-y-4">
+                <div>
+                    <h2 id="users-heading" class="text-lg font-semibold text-slate-950">Statistik pengguna</h2>
+                    <p class="mt-1 text-sm text-slate-500">Ringkasan akun yang terdaftar di sistem.</p>
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    @foreach ([
+                        ['key' => 'total', 'label' => 'Total pengguna', 'tone' => 'bg-blue-500'],
+                        ['key' => 'admin', 'label' => 'Admin', 'tone' => 'bg-violet-500'],
+                        ['key' => 'dosen', 'label' => 'Dosen', 'tone' => 'bg-emerald-500'],
+                        ['key' => 'mahasiswa', 'label' => 'Mahasiswa', 'tone' => 'bg-amber-500'],
+                    ] as $statistic)
+                        <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                            <div class="flex items-center gap-3">
+                                <span class="size-2.5 rounded-full {{ $statistic['tone'] }}" aria-hidden="true"></span>
+                                <h3 class="text-sm font-medium text-slate-600">{{ $statistic['label'] }}</h3>
+                            </div>
+                            <p class="mt-5 text-3xl font-bold tracking-tight text-slate-950" data-statistic="{{ $statistic['key'] }}">{{ number_format($userStatistics[$statistic['key']]) }}</p>
+                        </article>
+                    @endforeach
+                </div>
+            </section>
+        @endif
+
         <section aria-labelledby="attendance-heading" class="space-y-4">
             <div>
                 <h2 id="attendance-heading" class="text-lg font-semibold text-slate-950">Statistik kehadiran</h2>

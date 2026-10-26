@@ -3,11 +3,14 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class RoleAuthorizationTest extends TestCase
 {
+    use RefreshDatabase;
+
     /**
      * @return array<string, array{string}>
      */
