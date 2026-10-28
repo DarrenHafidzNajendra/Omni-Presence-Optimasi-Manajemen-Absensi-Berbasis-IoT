@@ -145,4 +145,17 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - Rerun a test after each change to it.
 - Run `vendor/bin/phpunit` to call the test runner directly. It accepts the same file path and `--filter=testName` arguments.
 
+## Efficient AI Agent Workflow
+
+- Inspect only files directly relevant to the current task.
+- Check `git status` before making changes and preserve all existing user modifications.
+- Do not repeat a project-wide audit or re-read files already inspected unless necessary.
+- Do not install dependencies or change environment, database, or Git configuration unless explicitly requested.
+- Do not modify unrelated files.
+- Implement the requested changes directly instead of only suggesting code.
+- Run only relevant tests and builds.
+- Keep explanations and final reports concise. Report changed files, test results, build results, and remaining issues.
+- Do not commit, push, or perform destructive operations without explicit permission.
+- Ask for clarification only when a missing detail blocks implementation.
+
 </laravel-boost-guidelines>
