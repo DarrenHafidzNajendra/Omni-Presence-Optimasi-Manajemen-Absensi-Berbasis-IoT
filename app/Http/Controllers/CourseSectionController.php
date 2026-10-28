@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AcademicPeriod;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\User;
@@ -23,8 +24,8 @@ class CourseSectionController extends Controller
         $search = trim($validated['search'] ?? '');
 
         $courseSections = CourseSection::query()
-            ->select(['id', 'course_id', 'name', 'academic_year', 'semester', 'is_active'])
-            ->with(['course:id,code,name'])
+            ->select(['id', 'course_id', 'academic_period_id', 'name', 'academic_year', 'semester', 'is_active'])
+            ->with(['course:id,code,name', 'academicPeriod:id,name,is_active'])
             ->when($search !== '', function (Builder $query) use ($search): void {
                 $query->where(function (Builder $query) use ($search): void {
                     $query->where('name', 'like', "%{$search}%")
@@ -55,6 +56,11 @@ class CourseSectionController extends Controller
                 ->orderBy('code')
                 ->orderBy('id')
                 ->get(['id', 'code', 'name']),
+            'academicPeriods' => AcademicPeriod::query()
+                ->where('is_active', true)
+                ->orderByDesc('starts_on')
+                ->orderBy('id')
+                ->get(['id', 'name', 'academic_year', 'semester']),
         ]);
     }
 
@@ -62,6 +68,7 @@ class CourseSectionController extends Controller
     {
         $courseSection->load([
             'course:id,code,name',
+            'academicPeriod:id,name,academic_year,semester,is_active',
             'lecturers' => fn ($query) => $query
                 ->with('user:id,name,nidn,is_active')
                 ->orderBy('teaching_type')
@@ -69,6 +76,9 @@ class CourseSectionController extends Controller
             'schedules' => fn ($query) => $query
                 ->orderBy('day_of_week')
                 ->orderBy('starts_at')
+                ->orderBy('id'),
+            'enrollments' => fn ($query) => $query
+                ->with('student:id,name,nim,is_active')
                 ->orderBy('id'),
         ]);
 
@@ -80,6 +90,15 @@ class CourseSectionController extends Controller
                 ->orderBy('name')
                 ->orderBy('id')
                 ->get(['id', 'name', 'nidn']),
+            'enrollmentOptions' => User::query()
+                ->where('role', 'mahasiswa')
+                ->where('is_active', true)
+                ->whereDoesntHave('enrollments', function (Builder $query) use ($courseSection): void {
+                    $query->where('course_section_id', $courseSection->id);
+                })
+                ->orderBy('name')
+                ->orderBy('id')
+                ->get(['id', 'name', 'nim']),
         ]);
     }
 
@@ -97,6 +116,14 @@ class CourseSectionController extends Controller
                 ->orderBy('code')
                 ->orderBy('id')
                 ->get(['id', 'code', 'name']),
+            'academicPeriods' => AcademicPeriod::query()
+                ->where(function (Builder $query) use ($courseSection): void {
+                    $query->where('is_active', true)
+                        ->orWhere('id', $courseSection->academic_period_id);
+                })
+                ->orderByDesc('starts_on')
+                ->orderBy('id')
+                ->get(['id', 'name', 'academic_year', 'semester', 'is_active']),
         ]);
     }
 
@@ -107,6 +134,11 @@ class CourseSectionController extends Controller
                 'required',
                 'integer',
                 Rule::exists(Course::class, 'id')->where('is_active', true),
+            ],
+            'academic_period_id' => [
+                'required',
+                'integer',
+                Rule::exists(AcademicPeriod::class, 'id')->where('is_active', true),
             ],
             'name' => [
                 'required',
@@ -137,6 +169,14 @@ class CourseSectionController extends Controller
                 Rule::exists(Course::class, 'id')->where(function (QueryBuilder $query) use ($courseSection): void {
                     $query->where('is_active', true)
                         ->orWhere('id', $courseSection->course_id);
+                }),
+            ],
+            'academic_period_id' => [
+                'required',
+                'integer',
+                Rule::exists(AcademicPeriod::class, 'id')->where(function (QueryBuilder $query) use ($courseSection): void {
+                    $query->where('is_active', true)
+                        ->orWhere('id', $courseSection->academic_period_id);
                 }),
             ],
             'name' => [

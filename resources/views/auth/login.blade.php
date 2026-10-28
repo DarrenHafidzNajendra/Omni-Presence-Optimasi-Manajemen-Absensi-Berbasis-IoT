@@ -3,15 +3,14 @@
 @section('title', 'Masuk')
 
 @section('content')
-    <div class="mx-auto max-w-md">
-        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-            <div class="space-y-2">
-                <p class="text-sm font-semibold tracking-wide text-blue-700">OMNI-PRESENCE</p>
-                <h1 class="text-2xl font-bold tracking-tight text-slate-950">Masuk ke akun</h1>
-                <p class="text-sm leading-6 text-slate-600">Gunakan akun yang telah diberikan oleh administrator.</p>
-            </div>
+    <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+        <div class="space-y-2">
+            <p class="text-sm font-semibold tracking-wide text-blue-700">OMNI-PRESENCE</p>
+            <h1 class="text-2xl font-bold tracking-tight text-slate-950">Masuk ke akun</h1>
+            <p class="text-sm leading-6 text-slate-600">Gunakan akun yang telah diberikan oleh administrator.</p>
+        </div>
 
-            <form method="POST" action="{{ route('login') }}" class="mt-8 space-y-5">
+        <form method="POST" action="{{ route('login') }}" class="mt-8 space-y-5">
                 @csrf
 
                 <div class="space-y-2">
@@ -89,7 +88,6 @@
                     Masuk
                 </button>
             </form>
-        </div>
     </div>
 
     <script>

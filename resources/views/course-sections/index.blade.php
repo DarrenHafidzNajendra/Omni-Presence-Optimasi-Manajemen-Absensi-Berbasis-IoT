@@ -51,6 +51,7 @@
                             <tr>
                                 <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Mata Kuliah</th>
                                 <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Nama Kelas</th>
+                                <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Periode Akademik</th>
                                 <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Tahun Akademik</th>
                                 <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Semester</th>
                                 <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
@@ -65,6 +66,7 @@
                                         <span class="block text-sm text-slate-600">{{ $courseSection->course->name }}</span>
                                     </td>
                                     <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-700">{{ $courseSection->name }}</td>
+                                    <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-700">{{ $courseSection->academicPeriod?->name ?? 'Belum ditentukan' }}</td>
                                     <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-700">{{ $courseSection->academic_year }}</td>
                                     <td class="whitespace-nowrap px-6 py-4 text-sm capitalize text-slate-700">{{ $courseSection->semester }}</td>
                                     <td class="whitespace-nowrap px-6 py-4">

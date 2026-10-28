@@ -10,11 +10,20 @@ class CourseSection extends Model
 {
     protected $fillable = [
         'course_id',
+        'academic_period_id',
         'name',
         'academic_year',
         'semester',
         'is_active',
     ];
+
+    /**
+     * @return BelongsTo<AcademicPeriod, $this>
+     */
+    public function academicPeriod(): BelongsTo
+    {
+        return $this->belongsTo(AcademicPeriod::class);
+    }
 
     /**
      * @return BelongsTo<Course, $this>

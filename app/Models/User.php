@@ -31,6 +31,14 @@ class User extends Authenticatable
     }
 
     /**
+     * @return HasMany<Enrollment, $this>
+     */
+    public function enrollments(): HasMany
+    {
+        return $this->hasMany(Enrollment::class, 'student_id');
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>

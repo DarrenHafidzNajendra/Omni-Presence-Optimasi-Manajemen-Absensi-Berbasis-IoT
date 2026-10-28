@@ -32,6 +32,15 @@
                     <dd class="text-sm font-semibold text-slate-900">{{ $courseSection->name }}</dd>
                 </div>
                 <div class="grid gap-2 px-5 py-4 sm:grid-cols-[12rem_minmax(0,1fr)] sm:gap-6 sm:px-8">
+                    <dt class="text-sm font-medium text-slate-500">Periode Akademik</dt>
+                    <dd class="text-sm text-slate-900">
+                        {{ $courseSection->academicPeriod?->name ?? 'Belum ditentukan' }}
+                        @if ($courseSection->academicPeriod && ! $courseSection->academicPeriod->is_active)
+                            <span class="text-xs text-slate-500">(Nonaktif)</span>
+                        @endif
+                    </dd>
+                </div>
+                <div class="grid gap-2 px-5 py-4 sm:grid-cols-[12rem_minmax(0,1fr)] sm:gap-6 sm:px-8">
                     <dt class="text-sm font-medium text-slate-500">Tahun Akademik</dt>
                     <dd class="text-sm text-slate-900">{{ $courseSection->academic_year }}</dd>
                 </div>
@@ -90,6 +99,112 @@
                         </table>
                     </div>
                 @endif
+            </div>
+        </section>
+
+        <section aria-labelledby="enrollments-heading" class="space-y-4">
+            <div>
+                <h2 id="enrollments-heading" class="text-lg font-semibold text-slate-950">Mahasiswa terdaftar</h2>
+                <p class="mt-1 text-sm text-slate-500">Mahasiswa yang mengikuti kelas ini.</p>
+            </div>
+
+            <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                @if ($courseSection->enrollments->isEmpty())
+                    <p class="px-5 py-6 text-sm text-slate-500 sm:px-8">Belum ada mahasiswa terdaftar.</p>
+                @else
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-slate-200 text-left">
+                            <thead class="bg-slate-50">
+                                <tr>
+                                    <th scope="col" class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500 sm:px-8">Nama</th>
+                                    <th scope="col" class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">NIM</th>
+                                    <th scope="col" class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Status Akun</th>
+                                    <th scope="col" class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Status Enrollment</th>
+                                    <th scope="col" class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @foreach ($courseSection->enrollments as $enrollment)
+                                    <tr>
+                                        <td class="whitespace-nowrap px-5 py-4 text-sm font-medium text-slate-900 sm:px-8">{{ $enrollment->student->name }}</td>
+                                        <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-600">{{ $enrollment->student->nim }}</td>
+                                        <td class="px-5 py-4 text-sm">
+                                            <span @class([
+                                                'inline-flex rounded-full px-2.5 py-1 text-xs font-medium',
+                                                'bg-emerald-100 text-emerald-800' => $enrollment->student->is_active,
+                                                'bg-red-100 text-red-800' => ! $enrollment->student->is_active,
+                                            ])>
+                                                {{ $enrollment->student->is_active ? 'Aktif' : 'Nonaktif' }}
+                                            </span>
+                                        </td>
+                                        <td class="px-5 py-4 text-sm">
+                                            <span @class([
+                                                'inline-flex rounded-full px-2.5 py-1 text-xs font-medium',
+                                                'bg-emerald-100 text-emerald-800' => $enrollment->status === 'aktif',
+                                                'bg-slate-100 text-slate-700' => $enrollment->status === 'nonaktif',
+                                            ])>
+                                                {{ ucfirst($enrollment->status) }}
+                                            </span>
+                                        </td>
+                                        <td class="whitespace-nowrap px-5 py-4 text-sm">
+                                            <div class="flex items-center gap-3">
+                                                <form method="POST" action="{{ route('course-sections.enrollments.status', [$courseSection, $enrollment]) }}">
+                                                    @csrf
+                                                    @method('PATCH')
+                                                    <input type="hidden" name="status" value="{{ $enrollment->status === 'aktif' ? 'nonaktif' : 'aktif' }}">
+                                                    <button type="submit" class="font-semibold text-blue-700 hover:text-blue-900">
+                                                        {{ $enrollment->status === 'aktif' ? 'Nonaktifkan' : 'Aktifkan' }}
+                                                    </button>
+                                                </form>
+                                                <form method="POST" action="{{ route('course-sections.enrollments.destroy', [$courseSection, $enrollment]) }}" onsubmit="return confirm('Hapus enrollment mahasiswa ini?')">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="font-semibold text-red-700 hover:text-red-900">Hapus</button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+            </div>
+        </section>
+
+        <section aria-labelledby="enroll-student-heading" class="space-y-4">
+            <div>
+                <h2 id="enroll-student-heading" class="text-lg font-semibold text-slate-950">Daftarkan mahasiswa</h2>
+                <p class="mt-1 text-sm text-slate-500">Pilih mahasiswa aktif yang belum terdaftar di kelas ini.</p>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+                <form method="POST" action="{{ route('course-sections.enrollments.store', $courseSection) }}" class="space-y-6">
+                    @csrf
+                    <div class="space-y-2">
+                        <label for="student_id" class="block text-sm font-medium text-slate-700">Mahasiswa</label>
+                        <select
+                            id="student_id"
+                            name="student_id"
+                            required
+                            class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                            @error('student_id') aria-invalid="true" aria-describedby="student-id-error" @enderror
+                        >
+                            <option value="">Pilih mahasiswa</option>
+                            @foreach ($enrollmentOptions as $student)
+                                <option value="{{ $student->id }}" @selected((string) old('student_id') === (string) $student->id)>
+                                    {{ $student->name }} ({{ $student->nim }})
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('student_id')
+                            <p id="student-id-error" class="text-sm text-red-700">{{ $message }}</p>
+                        @enderror
+                    </div>
+                    <button type="submit" class="inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/25 sm:w-auto">
+                        Daftarkan Mahasiswa
+                    </button>
+                </form>
             </div>
         </section>
 

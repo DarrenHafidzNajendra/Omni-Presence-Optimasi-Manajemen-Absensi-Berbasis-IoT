@@ -9,7 +9,7 @@
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="min-h-screen overflow-x-hidden bg-slate-50 text-slate-800 antialiased lg:flex">
+<body class="min-h-screen overflow-x-hidden bg-slate-50 text-slate-800 antialiased @auth lg:flex @endauth">
     @auth
         <div id="sidebar-overlay" class="fixed inset-0 z-30 hidden bg-slate-950/50 lg:hidden" aria-hidden="true"></div>
 
@@ -123,7 +123,7 @@
             </footer>
         </div>
     @else
-        <div class="flex min-h-screen flex-col">
+        <div class="flex min-h-screen w-full flex-col">
             <header class="border-b border-slate-200 bg-white">
                 <div class="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
                     <a href="{{ route('login') }}" class="flex items-center gap-3">
@@ -135,7 +135,7 @@
                     </a>
                 </div>
             </header>
-            <main class="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+            <main class="flex w-full max-w-none flex-1 items-center justify-center px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
                 @yield('content')
             </main>
         </div>

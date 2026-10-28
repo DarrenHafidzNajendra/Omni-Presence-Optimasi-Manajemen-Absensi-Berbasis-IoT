@@ -1,11 +1,13 @@
 <?php
 
+use App\Http\Controllers\AcademicPeriodController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\ClassScheduleController;
 use App\Http\Controllers\CourseController;
 use App\Http\Controllers\CourseSectionController;
 use App\Http\Controllers\CourseSectionLecturerController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EnrollmentController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -29,6 +31,14 @@ Route::get('/users', [UserController::class, 'index'])
     ->name('users.index');
 
 Route::middleware(['auth', 'role:admin'])->group(function () {
+    Route::get('/academic-periods', [AcademicPeriodController::class, 'index'])->name('academic-periods.index');
+    Route::get('/academic-periods/create', [AcademicPeriodController::class, 'create'])->name('academic-periods.create');
+    Route::post('/academic-periods', [AcademicPeriodController::class, 'store'])->name('academic-periods.store');
+    Route::get('/academic-periods/{academicPeriod}', [AcademicPeriodController::class, 'show'])->name('academic-periods.show');
+    Route::get('/academic-periods/{academicPeriod}/edit', [AcademicPeriodController::class, 'edit'])->name('academic-periods.edit');
+    Route::put('/academic-periods/{academicPeriod}', [AcademicPeriodController::class, 'update'])->name('academic-periods.update');
+    Route::patch('/academic-periods/{academicPeriod}/status', [AcademicPeriodController::class, 'updateStatus'])->name('academic-periods.status');
+
     Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
     Route::get('/courses/create', [CourseController::class, 'create'])->name('courses.create');
     Route::post('/courses', [CourseController::class, 'store'])->name('courses.store');
@@ -46,6 +56,10 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::patch('/course-sections/{courseSection}/status', [CourseSectionController::class, 'updateStatus'])->name('course-sections.status');
     Route::post('/course-sections/{courseSection}/lecturers', [CourseSectionLecturerController::class, 'store'])->name('course-sections.lecturers.store');
     Route::scopeBindings()->group(function (): void {
+        Route::get('/course-sections/{courseSection}/enrollments', [EnrollmentController::class, 'index'])->name('course-sections.enrollments.index');
+        Route::post('/course-sections/{courseSection}/enrollments', [EnrollmentController::class, 'store'])->name('course-sections.enrollments.store');
+        Route::patch('/course-sections/{courseSection}/enrollments/{enrollment}/status', [EnrollmentController::class, 'updateStatus'])->name('course-sections.enrollments.status');
+        Route::delete('/course-sections/{courseSection}/enrollments/{enrollment}', [EnrollmentController::class, 'destroy'])->name('course-sections.enrollments.destroy');
         Route::get('/course-sections/{courseSection}/schedules', [ClassScheduleController::class, 'index'])->name('course-sections.schedules.index');
         Route::get('/course-sections/{courseSection}/schedules/create', [ClassScheduleController::class, 'create'])->name('course-sections.schedules.create');
         Route::post('/course-sections/{courseSection}/schedules', [ClassScheduleController::class, 'store'])->name('course-sections.schedules.store');
