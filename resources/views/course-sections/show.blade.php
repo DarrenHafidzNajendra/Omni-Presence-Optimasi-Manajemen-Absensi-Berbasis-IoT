@@ -4,12 +4,28 @@
 
 @section('content')
     <div class="mx-auto max-w-3xl space-y-8">
-        <section class="space-y-2">
-            <p class="text-sm font-semibold tracking-wide text-blue-700">AKADEMIK</p>
-            <h1 class="text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">Detail Kelas</h1>
-            <p class="max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-                Informasi kelas {{ $courseSection->name }} yang terdaftar di Omni-Presence.
-            </p>
+        <section class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div class="space-y-2">
+                <p class="text-sm font-semibold tracking-wide text-blue-700">AKADEMIK</p>
+                <h1 class="text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">Detail Kelas</h1>
+                <p class="max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
+                    Informasi kelas {{ $courseSection->name }} yang terdaftar di Omni-Presence.
+                </p>
+            </div>
+            <div class="flex items-center gap-3">
+                <a
+                    href="{{ route('course-sections.attendance-recap', $courseSection) }}"
+                    class="inline-flex shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-500/25"
+                >
+                    Rekap Kehadiran
+                </a>
+                <a
+                    href="{{ route('course-sections.attendance-sessions.index', $courseSection) }}"
+                    class="inline-flex shrink-0 items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
+                >
+                    Kelola Sesi Absensi
+                </a>
+            </div>
         </section>
 
         @if (session('success'))

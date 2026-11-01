@@ -22,10 +22,16 @@ class CourseSectionController extends Controller
         ]);
 
         $search = trim($validated['search'] ?? '');
+        $user = $request->user();
 
         $courseSections = CourseSection::query()
             ->select(['id', 'course_id', 'academic_period_id', 'name', 'academic_year', 'semester', 'is_active'])
-            ->with(['course:id,code,name', 'academicPeriod:id,name,is_active'])
+            ->with(['course:id,code,name', 'academicPeriod:id,name,is_active', 'schedules'])
+            ->when($user && $user->role === 'dosen', function (Builder $query) use ($user): void {
+                $query->whereHas('lecturers', function (Builder $lecturerQuery) use ($user): void {
+                    $lecturerQuery->where('user_id', $user->id);
+                });
+            })
             ->when($search !== '', function (Builder $query) use ($search): void {
                 $query->where(function (Builder $query) use ($search): void {
                     $query->where('name', 'like', "%{$search}%")

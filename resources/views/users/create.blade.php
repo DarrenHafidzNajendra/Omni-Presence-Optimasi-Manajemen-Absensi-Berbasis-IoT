@@ -92,13 +92,14 @@
                             value="{{ old('nidn') }}"
                             autocomplete="off"
                             inputmode="numeric"
-                            pattern="[0-9]{6}"
-                            maxlength="6"
-                            title="NIDN harus terdiri dari tepat 6 digit angka."
+                            pattern="[0-9]{10}"
+                            maxlength="10"
+                            title="NIDN harus terdiri dari tepat 10 digit angka."
                             @if (old('role') !== \App\Enums\UserRole::Dosen->value) disabled @endif
                             class="block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
                             @error('nidn') aria-invalid="true" aria-describedby="nidn-error" @enderror
                         >
+                        <p class="text-xs text-slate-500">Kata sandi awal otomatis diatur sama dengan NIDN. Dosen wajib mengganti kata sandi pada login pertama.</p>
                         @error('nidn')
                             <p id="nidn-error" class="text-sm text-red-700">{{ $message }}</p>
                         @enderror
@@ -124,12 +125,13 @@
                             class="block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
                             @error('nim') aria-invalid="true" aria-describedby="nim-error" @enderror
                         >
+                        <p class="text-xs text-slate-500">Kata sandi awal otomatis diatur sama dengan NIM. Mahasiswa wajib mengganti kata sandi pada login pertama.</p>
                         @error('nim')
                             <p id="nim-error" class="text-sm text-red-700">{{ $message }}</p>
                         @enderror
                     </div>
 
-                    <div class="space-y-2">
+                    <div id="password-field-container" class="space-y-2" @if (old('role') && old('role') !== \App\Enums\UserRole::Admin->value) hidden @endif>
                         <label for="password" class="block text-sm font-medium text-slate-700">Kata sandi</label>
                         <input
                             id="password"
@@ -146,7 +148,7 @@
                         @enderror
                     </div>
 
-                    <div class="space-y-2">
+                    <div id="password-confirm-field-container" class="space-y-2" @if (old('role') && old('role') !== \App\Enums\UserRole::Admin->value) hidden @endif>
                         <label for="password_confirmation" class="block text-sm font-medium text-slate-700">Konfirmasi kata sandi</label>
                         <input
                             id="password_confirmation"
@@ -192,7 +194,26 @@
             });
         };
 
-        roleSelect.addEventListener('change', updateIdentityField);
+        const passwordContainer = document.getElementById('password-field-container');
+        const passwordConfirmContainer = document.getElementById('password-confirm-field-container');
+        const passwordInput = document.getElementById('password');
+        const passwordConfirmInput = document.getElementById('password_confirmation');
+
+        const updatePasswordVisibility = () => {
+            const isAdmin = roleSelect.value === 'admin';
+            passwordContainer.hidden = !isAdmin;
+            passwordConfirmContainer.hidden = !isAdmin;
+            passwordInput.disabled = !isAdmin;
+            passwordConfirmInput.disabled = !isAdmin;
+            passwordInput.required = isAdmin;
+            passwordConfirmInput.required = isAdmin;
+        };
+
+        roleSelect.addEventListener('change', () => {
+            updateIdentityField();
+            updatePasswordVisibility();
+        });
         updateIdentityField();
+        updatePasswordVisibility();
     </script>
 @endsection

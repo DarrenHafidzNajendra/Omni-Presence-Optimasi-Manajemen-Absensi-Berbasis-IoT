@@ -22,10 +22,9 @@
                     'Nama' => $academicPeriod->name,
                     'Tahun Akademik' => $academicPeriod->academic_year,
                     'Semester' => ucfirst($academicPeriod->semester),
-                    'Periode' => $academicPeriod->starts_on->format('d/m/Y').' - '.$academicPeriod->ends_on->format('d/m/Y'),
-                    'ATS' => $academicPeriod->ats_starts_on->format('d/m/Y').' - '.$academicPeriod->ats_ends_on->format('d/m/Y'),
-                    'UAS' => $academicPeriod->uas_starts_on->format('d/m/Y').' - '.$academicPeriod->uas_ends_on->format('d/m/Y'),
-                    'Batas Kelas Pengganti' => $academicPeriod->replacement_deadline->format('d/m/Y'),
+                    'Periode' => (\Carbon\Carbon::parse($academicPeriod->starts_on)->format('d/m/Y')).' - '.(\Carbon\Carbon::parse($academicPeriod->ends_on)->format('d/m/Y')),
+                    'ATS' => (\Carbon\Carbon::parse($academicPeriod->ats_starts_on)->format('d/m/Y')).' - '.(\Carbon\Carbon::parse($academicPeriod->ats_ends_on)->format('d/m/Y')),
+                    'UAS' => (\Carbon\Carbon::parse($academicPeriod->uas_starts_on)->format('d/m/Y')).' - '.(\Carbon\Carbon::parse($academicPeriod->uas_ends_on)->format('d/m/Y')),
                     'Status' => $academicPeriod->is_active ? 'Aktif' : 'Nonaktif',
                 ] as $label => $value)
                     <div class="grid gap-2 px-5 py-4 sm:grid-cols-[14rem_minmax(0,1fr)] sm:gap-6 sm:px-8">
@@ -33,6 +32,28 @@
                         <dd class="text-sm text-slate-900">{{ $value }}</dd>
                     </div>
                 @endforeach
+
+                @if ($academicPeriod->ats_replacement_starts_on || $academicPeriod->ats_replacement_ends_on)
+                    <div class="grid gap-2 px-5 py-4 sm:grid-cols-[14rem_minmax(0,1fr)] sm:gap-6 sm:px-8">
+                        <dt class="text-sm font-medium text-slate-500">Pengganti ATS</dt>
+                        <dd class="text-sm text-slate-900">
+                            {{ $academicPeriod->ats_replacement_starts_on ? \Carbon\Carbon::parse($academicPeriod->ats_replacement_starts_on)->format('d/m/Y') : '-' }}
+                            –
+                            {{ $academicPeriod->ats_replacement_ends_on ? \Carbon\Carbon::parse($academicPeriod->ats_replacement_ends_on)->format('d/m/Y') : '-' }}
+                        </dd>
+                    </div>
+                @endif
+
+                @if ($academicPeriod->uas_replacement_starts_on || $academicPeriod->uas_replacement_ends_on)
+                    <div class="grid gap-2 px-5 py-4 sm:grid-cols-[14rem_minmax(0,1fr)] sm:gap-6 sm:px-8">
+                        <dt class="text-sm font-medium text-slate-500">Pengganti UAS</dt>
+                        <dd class="text-sm text-slate-900">
+                            {{ $academicPeriod->uas_replacement_starts_on ? \Carbon\Carbon::parse($academicPeriod->uas_replacement_starts_on)->format('d/m/Y') : '-' }}
+                            –
+                            {{ $academicPeriod->uas_replacement_ends_on ? \Carbon\Carbon::parse($academicPeriod->uas_replacement_ends_on)->format('d/m/Y') : '-' }}
+                        </dd>
+                    </div>
+                @endif
             </dl>
         </section>
 

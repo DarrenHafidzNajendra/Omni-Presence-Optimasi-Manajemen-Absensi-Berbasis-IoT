@@ -1,20 +1,24 @@
 @extends('layouts.app')
 
-@section('title', 'Daftar Kelas')
+@section('title', auth()->user()->role === 'dosen' ? 'Kelas Saya' : 'Daftar Kelas')
 
 @section('content')
     <div class="space-y-8">
         <section class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div class="space-y-2">
                 <p class="text-sm font-semibold tracking-wide text-blue-700">AKADEMIK</p>
-                <h1 class="text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">Daftar Kelas</h1>
+                <h1 class="text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+                    {{ auth()->user()->role === 'dosen' ? 'Kelas Saya' : 'Daftar Kelas' }}
+                </h1>
                 <p class="max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-                    Kelola kelas untuk mata kuliah yang tersedia di Omni-Presence.
+                    {{ auth()->user()->role === 'dosen' ? 'Daftar kelas perkuliahan yang ditugaskan kepada Anda.' : 'Kelola kelas untuk mata kuliah yang tersedia di Omni-Presence.' }}
                 </p>
             </div>
-            <a href="{{ route('course-sections.create') }}" class="inline-flex shrink-0 items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/25">
-                Tambah Kelas
-            </a>
+            @if (auth()->user()->role === 'admin')
+                <a href="{{ route('course-sections.create') }}" class="inline-flex shrink-0 items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/25">
+                    Tambah Kelas
+                </a>
+            @endif
         </section>
 
         @if (session('success'))
@@ -38,11 +42,17 @@
         <section aria-label="Hasil daftar kelas" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             @if ($courseSections->isEmpty())
                 <div class="px-6 py-12 text-center">
-                    <h2 class="text-base font-semibold text-slate-900">Kelas tidak ditemukan</h2>
-                    <p class="mt-2 text-sm text-slate-500">Coba ubah kata pencarian atau tambahkan kelas baru.</p>
-                    <a href="{{ route('course-sections.index') }}" class="mt-5 inline-flex items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
-                        Lihat semua kelas
-                    </a>
+                    <h2 class="text-base font-semibold text-slate-900">
+                        {{ auth()->user()->role === 'dosen' ? 'Anda belum ditugaskan ke kelas mana pun.' : 'Kelas tidak ditemukan' }}
+                    </h2>
+                    <p class="mt-2 text-sm text-slate-500">
+                        {{ auth()->user()->role === 'dosen' ? 'Silakan hubungi Administrator jika penugasan mengajar Anda belum tercatat.' : 'Coba ubah kata pencarian atau tambahkan kelas baru.' }}
+                    </p>
+                    @if (auth()->user()->role === 'admin')
+                        <a href="{{ route('course-sections.index') }}" class="mt-5 inline-flex items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                            Lihat semua kelas
+                        </a>
+                    @endif
                 </div>
             @else
                 <div class="overflow-x-auto">
@@ -54,6 +64,9 @@
                                 <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Periode Akademik</th>
                                 <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Tahun Akademik</th>
                                 <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Semester</th>
+                                @if (auth()->user()->role === 'dosen')
+                                    <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Jadwal</th>
+                                @endif
                                 <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
                                 <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Aksi</th>
                             </tr>
@@ -69,6 +82,15 @@
                                     <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-700">{{ $courseSection->academicPeriod?->name ?? 'Belum ditentukan' }}</td>
                                     <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-700">{{ $courseSection->academic_year }}</td>
                                     <td class="whitespace-nowrap px-6 py-4 text-sm capitalize text-slate-700">{{ $courseSection->semester }}</td>
+                                    @if (auth()->user()->role === 'dosen')
+                                        <td class="px-6 py-4 text-xs text-slate-600">
+                                            @forelse ($courseSection->schedules as $schedule)
+                                                <div>{{ [1 => 'Senin', 2 => 'Selasa', 3 => 'Rabu', 4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu', 7 => 'Minggu'][$schedule->day_of_week] ?? '-' }}, {{ substr((string) $schedule->starts_at, 0, 5) }}-{{ substr((string) $schedule->ends_at, 0, 5) }} ({{ ucfirst($schedule->session_type) }})</div>
+                                            @empty
+                                                <span class="text-slate-400">Belum ada jadwal</span>
+                                            @endforelse
+                                        </td>
+                                    @endif
                                     <td class="whitespace-nowrap px-6 py-4">
                                         <span @class([
                                             'inline-flex rounded-full px-2.5 py-1 text-xs font-medium',
@@ -81,37 +103,51 @@
                                     <td class="whitespace-nowrap px-6 py-4">
                                         <div class="flex min-w-max flex-wrap items-center gap-2">
                                             <a
-                                                href="{{ route('course-sections.show', $courseSection) }}"
-                                                class="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-500/15"
+                                                href="{{ route('course-sections.attendance-sessions.index', $courseSection) }}"
+                                                class="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg border border-blue-600 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 focus:outline-none focus:ring-4 focus:ring-blue-500/15"
                                             >
-                                                Detail
+                                                {{ auth()->user()->role === 'dosen' ? 'Kelola Absensi' : 'Absensi' }}
                                             </a>
                                             <a
-                                                href="{{ route('course-sections.edit', $courseSection) }}"
+                                                href="{{ route('course-sections.attendance-recap', $courseSection) }}"
                                                 class="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-500/15"
                                             >
-                                                Edit
+                                                Rekap
                                             </a>
-                                            <form
-                                                class="shrink-0"
-                                                method="POST"
-                                                action="{{ route('course-sections.status', $courseSection) }}"
-                                                onsubmit="{{ $courseSection->is_active ? "return confirm('Nonaktifkan kelas ini?')" : '' }}"
-                                            >
-                                                @csrf
-                                                @method('PATCH')
-                                                <input type="hidden" name="is_active" value="{{ $courseSection->is_active ? '0' : '1' }}">
-                                                <button
-                                                    type="submit"
-                                                    @class([
-                                                        'inline-flex items-center justify-center rounded-lg border px-3 py-2 text-sm font-semibold transition focus:outline-none focus:ring-4',
-                                                        'border-red-300 text-red-700 hover:bg-red-50 focus:ring-red-500/15' => $courseSection->is_active,
-                                                        'border-emerald-300 text-emerald-700 hover:bg-emerald-50 focus:ring-emerald-500/15' => ! $courseSection->is_active,
-                                                    ])
+                                            @if (auth()->user()->role === 'admin')
+                                                <a
+                                                    href="{{ route('course-sections.show', $courseSection) }}"
+                                                    class="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-500/15"
                                                 >
-                                                    {{ $courseSection->is_active ? 'Nonaktifkan' : 'Aktifkan' }}
-                                                </button>
-                                            </form>
+                                                    Detail
+                                                </a>
+                                                <a
+                                                    href="{{ route('course-sections.edit', $courseSection) }}"
+                                                    class="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-500/15"
+                                                >
+                                                    Edit
+                                                </a>
+                                                <form
+                                                    class="shrink-0"
+                                                    method="POST"
+                                                    action="{{ route('course-sections.status', $courseSection) }}"
+                                                    onsubmit="{{ $courseSection->is_active ? "return confirm('Nonaktifkan kelas ini?')" : '' }}"
+                                                >
+                                                    @csrf
+                                                    @method('PATCH')
+                                                    <input type="hidden" name="is_active" value="{{ $courseSection->is_active ? '0' : '1' }}">
+                                                    <button
+                                                        type="submit"
+                                                        @class([
+                                                            'inline-flex items-center justify-center rounded-lg border px-3 py-2 text-sm font-semibold transition focus:outline-none focus:ring-4',
+                                                            'border-red-300 text-red-700 hover:bg-red-50 focus:ring-red-500/15' => $courseSection->is_active,
+                                                            'border-emerald-300 text-emerald-700 hover:bg-emerald-50 focus:ring-emerald-500/15' => ! $courseSection->is_active,
+                                                        ])
+                                                    >
+                                                        {{ $courseSection->is_active ? 'Nonaktifkan' : 'Aktifkan' }}
+                                                    </button>
+                                                </form>
+                                            @endif
                                         </div>
                                     </td>
                                 </tr>

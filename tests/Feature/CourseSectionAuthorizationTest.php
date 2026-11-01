@@ -87,6 +87,85 @@ class CourseSectionAuthorizationTest extends TestCase
         );
     }
 
+    public function test_lecturer_sees_only_assigned_classes_and_sidebar_link(): void
+    {
+        $assignedSection1 = $this->createCourseSection('Kelas Teori');
+        $assignedSection2 = $this->createCourseSection('Kelas Praktikum');
+        $unassignedSection = $this->createCourseSection('Kelas Dosen Lain');
+
+        $lecturer = User::factory()->create(['role' => 'dosen']);
+
+        // Penugasan teori
+        CourseSectionLecturer::query()->create([
+            'course_section_id' => $assignedSection1->id,
+            'user_id' => $lecturer->id,
+            'teaching_type' => 'teori',
+        ]);
+
+        // Penugasan praktikum
+        CourseSectionLecturer::query()->create([
+            'course_section_id' => $assignedSection2->id,
+            'user_id' => $lecturer->id,
+            'teaching_type' => 'praktikum',
+        ]);
+
+        $response = $this->actingAs($lecturer)->get(route('course-sections.index'));
+
+        $response->assertOk()
+            ->assertSeeText('Kelas Saya')
+            ->assertSeeText('Kelas Teori')
+            ->assertSeeText('Kelas Praktikum')
+            ->assertDontSeeText('Kelas Dosen Lain')
+            ->assertSeeText('Kelola Absensi')
+            ->assertSee(route('course-sections.attendance-sessions.index', $assignedSection1), false)
+            ->assertSee(route('course-sections.attendance-sessions.index', $assignedSection2), false)
+            // Tidak menampilkan tombol admin
+            ->assertDontSeeText('Tambah Kelas')
+            ->assertDontSeeText('Detail')
+            ->assertDontSeeText('Edit');
+    }
+
+    public function test_lecturer_without_assignments_sees_empty_state_without_error(): void
+    {
+        $lecturer = User::factory()->create(['role' => 'dosen']);
+        $this->createCourseSection('Kelas Tersedia');
+
+        $response = $this->actingAs($lecturer)->get(route('course-sections.index'));
+
+        $response->assertOk()
+            ->assertSeeText('Anda belum ditugaskan ke kelas mana pun.')
+            ->assertDontSeeText('Kelas Tersedia');
+    }
+
+    public function test_lecturer_cannot_access_attendance_sessions_of_unassigned_class(): void
+    {
+        $unassignedSection = $this->createCourseSection('Kelas Terlarang');
+        $lecturer = User::factory()->create(['role' => 'dosen']);
+
+        $response = $this->actingAs($lecturer)->get(
+            route('course-sections.attendance-sessions.index', $unassignedSection)
+        );
+
+        $response->assertForbidden();
+    }
+
+    public function test_admin_sees_all_course_sections_on_index(): void
+    {
+        $section1 = $this->createCourseSection('Kelas 1');
+        $section2 = $this->createCourseSection('Kelas 2');
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $response = $this->actingAs($admin)->get(route('course-sections.index'));
+
+        $response->assertOk()
+            ->assertSeeText('Daftar Kelas')
+            ->assertSeeText('Kelas 1')
+            ->assertSeeText('Kelas 2')
+            ->assertSeeText('Tambah Kelas')
+            ->assertSeeText('Detail')
+            ->assertSeeText('Edit');
+    }
+
     private function createCourseSection(string $name = 'Kelas A'): CourseSection
     {
         $course = Course::query()->create([

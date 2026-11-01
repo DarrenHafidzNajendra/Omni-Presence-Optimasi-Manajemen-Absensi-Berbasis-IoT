@@ -96,9 +96,9 @@
                             value="{{ old('nidn', $user->nidn) }}"
                             autocomplete="off"
                             inputmode="numeric"
-                            pattern="[0-9]{6}"
-                            maxlength="6"
-                            title="NIDN harus terdiri dari tepat 6 digit angka."
+                            pattern="[0-9]{10}"
+                            maxlength="10"
+                            title="NIDN harus terdiri dari tepat 10 digit angka."
                             @if ($selectedRole !== \App\Enums\UserRole::Dosen->value) disabled @endif
                             class="block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
                             @error('nidn') aria-invalid="true" aria-describedby="nidn-error" @enderror

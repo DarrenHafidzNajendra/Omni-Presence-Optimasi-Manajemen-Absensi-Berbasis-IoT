@@ -96,7 +96,11 @@ class AcademicPeriodController extends Controller
             'ats_ends_on' => ['required', 'date_format:Y-m-d'],
             'uas_starts_on' => ['required', 'date_format:Y-m-d'],
             'uas_ends_on' => ['required', 'date_format:Y-m-d'],
-            'replacement_deadline' => ['required', 'date_format:Y-m-d'],
+            'ats_replacement_starts_on' => ['nullable', 'date_format:Y-m-d'],
+            'ats_replacement_ends_on' => ['nullable', 'date_format:Y-m-d'],
+            'uas_replacement_starts_on' => ['nullable', 'date_format:Y-m-d'],
+            'uas_replacement_ends_on' => ['nullable', 'date_format:Y-m-d'],
+            'replacement_deadline' => ['nullable', 'date_format:Y-m-d'],
             'is_active' => ['boolean'],
         ]);
 
@@ -108,7 +112,6 @@ class AcademicPeriodController extends Controller
                 'ats_ends_on',
                 'uas_starts_on',
                 'uas_ends_on',
-                'replacement_deadline',
             ];
 
             if ($validator->errors()->isNotEmpty()) {
@@ -123,9 +126,16 @@ class AcademicPeriodController extends Controller
                 $validator->errors()->add('ends_on', 'Tanggal selesai harus setelah atau sama dengan tanggal mulai.');
             }
 
-            foreach (['ats_starts_on', 'ats_ends_on', 'uas_starts_on', 'uas_ends_on', 'replacement_deadline'] as $field) {
+            foreach (['ats_starts_on', 'ats_ends_on', 'uas_starts_on', 'uas_ends_on'] as $field) {
                 if ($dates[$field]->isBefore($dates['starts_on']) || $dates[$field]->isAfter($dates['ends_on'])) {
                     $validator->errors()->add($field, 'Tanggal harus berada dalam rentang periode akademik.');
+                }
+            }
+
+            if (! empty($data['replacement_deadline'])) {
+                $deadline = CarbonImmutable::createFromFormat('Y-m-d', $data['replacement_deadline']);
+                if ($deadline->isBefore($dates['starts_on']) || $deadline->isAfter($dates['ends_on'])) {
+                    $validator->errors()->add('replacement_deadline', 'Tanggal harus berada dalam rentang periode akademik.');
                 }
             }
 
@@ -139,6 +149,42 @@ class AcademicPeriodController extends Controller
 
             if ($dates['uas_starts_on']->isBefore($dates['ats_ends_on'])) {
                 $validator->errors()->add('uas_starts_on', 'Tanggal mulai UAS tidak boleh mendahului selesai ATS.');
+            }
+
+            // Validasi periode pengganti ATS (jika diisi)
+            $replacementFields = [
+                'ats_replacement_starts_on',
+                'ats_replacement_ends_on',
+                'uas_replacement_starts_on',
+                'uas_replacement_ends_on',
+            ];
+
+            $replacementDates = [];
+            foreach ($replacementFields as $field) {
+                if (! empty($data[$field])) {
+                    $replacementDates[$field] = CarbonImmutable::createFromFormat('Y-m-d', $data[$field]);
+                }
+            }
+
+            // Setiap tanggal pengganti harus berada dalam rentang semester
+            foreach ($replacementDates as $field => $date) {
+                if ($date->isBefore($dates['starts_on']) || $date->isAfter($dates['ends_on'])) {
+                    $validator->errors()->add($field, 'Tanggal harus berada dalam rentang periode akademik.');
+                }
+            }
+
+            // Pasangan start <= end untuk pengganti ATS
+            if (isset($replacementDates['ats_replacement_starts_on'], $replacementDates['ats_replacement_ends_on'])) {
+                if ($replacementDates['ats_replacement_ends_on']->isBefore($replacementDates['ats_replacement_starts_on'])) {
+                    $validator->errors()->add('ats_replacement_ends_on', 'Tanggal selesai pengganti ATS harus setelah atau sama dengan tanggal mulai.');
+                }
+            }
+
+            // Pasangan start <= end untuk pengganti UAS
+            if (isset($replacementDates['uas_replacement_starts_on'], $replacementDates['uas_replacement_ends_on'])) {
+                if ($replacementDates['uas_replacement_ends_on']->isBefore($replacementDates['uas_replacement_starts_on'])) {
+                    $validator->errors()->add('uas_replacement_ends_on', 'Tanggal selesai pengganti UAS harus setelah atau sama dengan tanggal mulai.');
+                }
             }
         });
 

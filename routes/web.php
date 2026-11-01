@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\AcademicPeriodController;
+use App\Http\Controllers\AttendanceSessionController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\Auth\FirstPasswordChangeController;
 use App\Http\Controllers\ClassScheduleController;
 use App\Http\Controllers\CourseController;
 use App\Http\Controllers\CourseSectionController;
@@ -13,14 +15,21 @@ use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard');
 
-Route::middleware('guest')->group(function () {
-    Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
-    Route::post('/login', [AuthenticatedSessionController::class, 'store'])->middleware('throttle:login');
-});
+Route::get('/login', [AuthenticatedSessionController::class, 'create'])
+    ->middleware('guest')
+    ->name('login');
+
+Route::post('/login', [AuthenticatedSessionController::class, 'store'])
+    ->middleware('throttle:login');
 
 Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
     ->middleware('auth')
     ->name('logout');
+
+Route::middleware('auth')->group(function (): void {
+    Route::get('/first-password-change', [FirstPasswordChangeController::class, 'show'])->name('password.first-change');
+    Route::post('/first-password-change', [FirstPasswordChangeController::class, 'update'])->name('password.first-change.update');
+});
 
 Route::get('/dashboard', DashboardController::class)
     ->middleware(['auth', 'role:admin,dosen,mahasiswa'])
@@ -29,6 +38,10 @@ Route::get('/dashboard', DashboardController::class)
 Route::get('/users', [UserController::class, 'index'])
     ->middleware(['auth', 'role:admin'])
     ->name('users.index');
+
+Route::middleware(['auth', 'role:admin,dosen'])->group(function (): void {
+    Route::get('/course-sections', [CourseSectionController::class, 'index'])->name('course-sections.index');
+});
 
 Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::get('/academic-periods', [AcademicPeriodController::class, 'index'])->name('academic-periods.index');
@@ -47,7 +60,6 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::put('/courses/{course}', [CourseController::class, 'update'])->name('courses.update');
     Route::patch('/courses/{course}/status', [CourseController::class, 'updateStatus'])->name('courses.status');
 
-    Route::get('/course-sections', [CourseSectionController::class, 'index'])->name('course-sections.index');
     Route::get('/course-sections/create', [CourseSectionController::class, 'create'])->name('course-sections.create');
     Route::post('/course-sections', [CourseSectionController::class, 'store'])->name('course-sections.store');
     Route::get('/course-sections/{courseSection}', [CourseSectionController::class, 'show'])->name('course-sections.show');
@@ -73,4 +85,20 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::get('/users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
     Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
     Route::patch('/users/{user}/status', [UserController::class, 'updateStatus'])->name('users.status');
+});
+
+Route::middleware(['auth', 'role:admin,dosen'])->group(function (): void {
+    Route::scopeBindings()->group(function (): void {
+        Route::get('/course-sections/{courseSection}/attendance-recap', [AttendanceSessionController::class, 'recap'])->name('course-sections.attendance-recap');
+        Route::get('/course-sections/{courseSection}/attendance-sessions', [AttendanceSessionController::class, 'index'])->name('course-sections.attendance-sessions.index');
+        Route::get('/course-sections/{courseSection}/attendance-sessions/create', [AttendanceSessionController::class, 'create'])->name('course-sections.attendance-sessions.create');
+        Route::post('/course-sections/{courseSection}/attendance-sessions', [AttendanceSessionController::class, 'store'])->name('course-sections.attendance-sessions.store');
+        Route::get('/course-sections/{courseSection}/attendance-sessions/{attendanceSession}', [AttendanceSessionController::class, 'show'])->name('course-sections.attendance-sessions.show');
+        Route::get('/course-sections/{courseSection}/attendance-sessions/{attendanceSession}/replacement/create', [AttendanceSessionController::class, 'createReplacement'])->name('course-sections.attendance-sessions.replacement.create');
+        Route::post('/course-sections/{courseSection}/attendance-sessions/{attendanceSession}/open', [AttendanceSessionController::class, 'open'])->name('course-sections.attendance-sessions.open');
+        Route::post('/course-sections/{courseSection}/attendance-sessions/{attendanceSession}/close', [AttendanceSessionController::class, 'close'])->name('course-sections.attendance-sessions.close');
+        Route::post('/course-sections/{courseSection}/attendance-sessions/{attendanceSession}/cancel', [AttendanceSessionController::class, 'cancel'])->name('course-sections.attendance-sessions.cancel');
+        Route::post('/course-sections/{courseSection}/attendance-sessions/{attendanceSession}/replacement', [AttendanceSessionController::class, 'storeReplacement'])->name('course-sections.attendance-sessions.replacement');
+        Route::post('/course-sections/{courseSection}/attendance-sessions/{attendanceSession}/records', [AttendanceSessionController::class, 'recordAttendance'])->name('course-sections.attendance-sessions.records.store');
+    });
 });

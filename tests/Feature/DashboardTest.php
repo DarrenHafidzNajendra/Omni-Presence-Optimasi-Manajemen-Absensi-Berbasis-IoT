@@ -3,6 +3,11 @@
 namespace Tests\Feature;
 
 use App\Enums\UserRole;
+use App\Models\AcademicPeriod;
+use App\Models\AttendanceRecord;
+use App\Models\AttendanceSession;
+use App\Models\Course;
+use App\Models\CourseSection;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -66,6 +71,69 @@ class DashboardTest extends TestCase
 
         $response->assertOk()
             ->assertDontSeeText('Statistik pengguna')
-            ->assertSeeText('Statistik kehadiran');
+            ->assertSeeText('Statistik kehadiran')
+            ->assertSeeText('Kelas yang diampu');
+    }
+
+    public function test_dashboard_falls_back_to_cumulative_attendance_statistics_when_historical_records_exist(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin->value]);
+        $student = User::factory()->create(['role' => UserRole::Mahasiswa->value]);
+
+        $course = Course::query()->create([
+            'code' => 'IF999',
+            'name' => 'Pemrograman Lanjut',
+        ]);
+
+        $period = AcademicPeriod::query()->create([
+            'name' => 'Semester Ganjil 2026/2027',
+            'academic_year' => '2026/2027',
+            'semester' => 'ganjil',
+            'starts_on' => '2026-08-01',
+            'ends_on' => '2027-01-31',
+            'ats_starts_on' => '2026-10-05',
+            'ats_ends_on' => '2026-10-16',
+            'uas_starts_on' => '2027-01-11',
+            'uas_ends_on' => '2027-01-22',
+            'replacement_deadline' => '2027-01-29',
+            'is_active' => true,
+        ]);
+
+        $section = CourseSection::query()->create([
+            'course_id' => $course->id,
+            'academic_period_id' => $period->id,
+            'name' => 'Kelas Demo',
+            'academic_year' => '2026/2027',
+            'semester' => 'ganjil',
+            'is_active' => true,
+        ]);
+
+        $session = AttendanceSession::query()->create([
+            'course_section_id' => $section->id,
+            'session_type' => 'teori',
+            'delivery_mode' => 'onsite',
+            'title' => 'Pertemuan 1',
+            'starts_at' => '2026-09-08 08:00:00',
+            'ends_at' => '2026-09-08 10:00:00',
+            'attendance_opens_at' => '2026-09-08 07:45:00',
+            'attendance_closes_at' => '2026-09-08 10:15:00',
+            'allowed_methods' => ['manual'],
+            'status' => 'ditutup',
+        ]);
+
+        AttendanceRecord::query()->create([
+            'attendance_session_id' => $session->id,
+            'student_id' => $student->id,
+            'status' => 'hadir',
+            'method' => 'manual',
+            'checked_in_at' => '2026-09-08 08:05:00',
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('dashboard'));
+
+        $response->assertOk()
+            ->assertSee('data-statistic="attendance-total">1', false)
+            ->assertSee('data-statistic="attendance-hadir">1', false)
+            ->assertDontSeeText('Data belum tersedia');
     }
 }

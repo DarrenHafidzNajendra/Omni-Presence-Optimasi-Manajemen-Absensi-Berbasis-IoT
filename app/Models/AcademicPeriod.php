@@ -17,6 +17,10 @@ class AcademicPeriod extends Model
         'ats_ends_on',
         'uas_starts_on',
         'uas_ends_on',
+        'ats_replacement_starts_on',
+        'ats_replacement_ends_on',
+        'uas_replacement_starts_on',
+        'uas_replacement_ends_on',
         'replacement_deadline',
         'is_active',
     ];
@@ -30,7 +34,10 @@ class AcademicPeriod extends Model
             'ats_ends_on' => 'date',
             'uas_starts_on' => 'date',
             'uas_ends_on' => 'date',
-            'replacement_deadline' => 'date',
+            'ats_replacement_starts_on' => 'date',
+            'ats_replacement_ends_on' => 'date',
+            'uas_replacement_starts_on' => 'date',
+            'uas_replacement_ends_on' => 'date',
             'is_active' => 'boolean',
         ];
     }

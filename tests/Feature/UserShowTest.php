@@ -19,8 +19,8 @@ class UserShowTest extends TestCase
     {
         return [
             'admin email' => [UserRole::Admin, 'email', 'detail-admin@example.com', 'Alamat email'],
-            'dosen NIDN' => [UserRole::Dosen, 'nidn', '001234', 'NIDN'],
-            'mahasiswa NIM' => [UserRole::Mahasiswa, 'nim', '0012345678', 'NIM'],
+            'dosen NIDN' => [UserRole::Dosen, 'nidn', '0012345678', 'NIDN'],
+            'mahasiswa NIM' => [UserRole::Mahasiswa, 'nim', '00123456785678', 'NIM'],
         ];
     }
 
@@ -69,7 +69,7 @@ class UserShowTest extends TestCase
         $user = User::factory()->create([
             'name' => "<script>alert('xss')</script>",
             'role' => UserRole::Dosen->value,
-            'nidn' => '001234',
+            'nidn' => '0012345678',
         ]);
         $admin = User::factory()->create(['role' => UserRole::Admin->value]);
 
@@ -116,7 +116,7 @@ class UserShowTest extends TestCase
         $user = User::factory()->create([
             'is_active' => false,
             'role' => UserRole::Mahasiswa->value,
-            'nim' => '0012345678',
+            'nim' => '00123456785678',
         ]);
         $admin = User::factory()->create(['role' => UserRole::Admin->value]);
 

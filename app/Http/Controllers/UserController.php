@@ -37,7 +37,7 @@ class UserController extends Controller
                 'exclude_unless:role,'.UserRole::Dosen->value,
                 'required',
                 'string',
-                'regex:/\A[0-9]{6}\z/',
+                'regex:/\A[0-9]{10}\z/',
                 Rule::unique(User::class, 'nidn'),
             ],
             'nim' => [
@@ -47,8 +47,25 @@ class UserController extends Controller
                 'regex:/\A[0-9]{10}\z/',
                 Rule::unique(User::class, 'nim'),
             ],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password' => [
+                'exclude_unless:role,'.UserRole::Admin->value,
+                'required',
+                'string',
+                'min:8',
+                'confirmed',
+            ],
         ]);
+
+        $defaultPassword = match ($role) {
+            UserRole::Mahasiswa->value => $validated['nim'],
+            UserRole::Dosen->value => $validated['nidn'],
+            default => $validated['password'],
+        };
+
+        $mustChangePassword = match ($role) {
+            UserRole::Mahasiswa->value, UserRole::Dosen->value => true,
+            default => false,
+        };
 
         User::create([
             'name' => $validated['name'],
@@ -56,7 +73,8 @@ class UserController extends Controller
             'nidn' => $role === UserRole::Dosen->value ? $validated['nidn'] : null,
             'nim' => $role === UserRole::Mahasiswa->value ? $validated['nim'] : null,
             'role' => $validated['role'],
-            'password' => Hash::make($validated['password']),
+            'password' => Hash::make($defaultPassword),
+            'must_change_password' => $mustChangePassword,
         ]);
 
         return redirect()
@@ -120,7 +138,7 @@ class UserController extends Controller
                 'exclude_unless:role,'.UserRole::Dosen->value,
                 'required',
                 'string',
-                'regex:/\A[0-9]{6}\z/',
+                'regex:/\A[0-9]{10}\z/',
                 Rule::unique(User::class, 'nidn')->ignore($user),
             ],
             'nim' => [

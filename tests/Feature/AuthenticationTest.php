@@ -19,8 +19,8 @@ class AuthenticationTest extends TestCase
     {
         return [
             'admin email' => [UserRole::Admin, 'email', 'admin@example.com'],
-            'dosen NIDN' => [UserRole::Dosen, 'nidn', 'NIDN-001'],
-            'mahasiswa NIM' => [UserRole::Mahasiswa, 'nim', 'NIM-001'],
+            'dosen NIDN' => [UserRole::Dosen, 'nidn', '0123456789'],
+            'mahasiswa NIM' => [UserRole::Mahasiswa, 'nim', '0987654321'],
         ];
     }
 
@@ -44,7 +44,7 @@ class AuthenticationTest extends TestCase
 
     public function test_login_rejects_invalid_credentials_without_authenticating(): void
     {
-        $user = $this->createUserForRole(UserRole::Dosen, 'nidn', 'NIDN-INVALID-PASSWORD');
+        $user = $this->createUserForRole(UserRole::Dosen, 'nidn', '0123456789');
 
         $response = $this->post(route('login'), [
             'role' => UserRole::Dosen->value,
@@ -132,12 +132,12 @@ class AuthenticationTest extends TestCase
 
     public function test_login_rejects_an_identity_submitted_under_a_different_role(): void
     {
-        $user = $this->createUserForRole(UserRole::Dosen, 'nidn', 'SHARED-IDENTIFIER');
-        $user->forceFill(['nim' => 'SHARED-IDENTIFIER'])->save();
+        $user = $this->createUserForRole(UserRole::Dosen, 'nidn', '0123456789');
+        $user->forceFill(['nim' => '0123456789'])->save();
 
         $response = $this->post(route('login'), [
             'role' => UserRole::Mahasiswa->value,
-            'identity' => 'SHARED-IDENTIFIER',
+            'identity' => '0123456789',
             'password' => 'password',
         ]);
 
@@ -180,11 +180,70 @@ class AuthenticationTest extends TestCase
 
     public function test_authenticated_user_can_log_out(): void
     {
-        $user = $this->createUserForRole(UserRole::Mahasiswa, 'nim', 'NIM-LOGOUT');
+        $user = $this->createUserForRole(UserRole::Mahasiswa, 'nim', '0987654321');
 
         $response = $this->actingAs($user)->post(route('logout'));
 
         $response->assertRedirectToRoute('login');
+        $this->assertGuest();
+    }
+
+    public function test_submitting_login_when_already_authenticated_as_admin_switches_identity_to_dosen_and_revokes_admin_access(): void
+    {
+        $admin = $this->createUserForRole(UserRole::Admin, 'email', 'admin@omnipresence.local');
+        $dosen = $this->createUserForRole(UserRole::Dosen, 'nidn', '0001018501');
+
+        // 1. Login sebagai Admin di tab pertama
+        $this->post(route('login'), [
+            'role' => UserRole::Admin->value,
+            'identity' => $admin->email,
+            'password' => 'password',
+        ])->assertRedirectToRoute('dashboard');
+
+        $this->assertAuthenticatedAs($admin);
+        $this->get(route('users.index'))->assertOk();
+
+        // 2. Di tab lain (tanpa logout terlebih dahulu), kirim POST login sebagai Dosen
+        $loginAsDosenResponse = $this->post(route('login'), [
+            'role' => UserRole::Dosen->value,
+            'identity' => $dosen->nidn,
+            'password' => 'password',
+        ]);
+
+        $loginAsDosenResponse->assertRedirectToRoute('dashboard');
+
+        // 3. Pastikan session sekarang terautentikasi sebagai Dosen, BUKAN lagi Admin
+        $this->assertAuthenticatedAs($dosen);
+
+        // 4. Pastikan akses ke halaman Admin ditolak (403 Forbidden)
+        $this->get(route('users.index'))->assertForbidden();
+        $this->get(route('courses.index'))->assertForbidden();
+        $this->get(route('academic-periods.index'))->assertForbidden();
+
+        // 5. Pastikan dashboard menampilkan tampilan Dosen (tanpa statistik pengguna Admin)
+        $this->get(route('dashboard'))
+            ->assertOk()
+            ->assertDontSeeText('Statistik pengguna')
+            ->assertSeeText($dosen->name);
+    }
+
+    public function test_failed_login_attempt_while_authenticated_invalidates_previous_admin_session(): void
+    {
+        $admin = $this->createUserForRole(UserRole::Admin, 'email', 'admin@omnipresence.local');
+        $dosen = $this->createUserForRole(UserRole::Dosen, 'nidn', '0001018501');
+
+        $this->actingAs($admin);
+        $this->assertAuthenticatedAs($admin);
+
+        // Coba login sebagai Dosen dengan password salah saat sesi Admin masih aktif
+        $response = $this->post(route('login'), [
+            'role' => UserRole::Dosen->value,
+            'identity' => $dosen->nidn,
+            'password' => 'wrong-password',
+        ]);
+
+        $response->assertSessionHasErrors('identity');
+        // Sesi Admin lama harus ikut dihentikan agar tidak mengecoh pengguna
         $this->assertGuest();
     }
 

@@ -103,6 +103,7 @@ class EloquentModelsTest extends TestCase
         $this->assertSame($record->id, $session->attendanceRecords->first()->id);
         $this->assertSame($session->id, $record->attendanceSession->id);
         $this->assertSame($student->id, $record->student->id);
+        $this->assertSame($record->id, $student->attendanceRecords->first()->id);
     }
 
     public function test_models_cast_schema_attributes_to_expected_types(): void
@@ -191,6 +192,8 @@ class EloquentModelsTest extends TestCase
             'allowed_methods' => ['qr_code'],
             'status' => 'terjadwal',
             'opened_by' => $user->id,
+            'cancelled_by' => $user->id,
+            'closed_by' => $user->id,
         ]);
         $record = AttendanceRecord::query()->create([
             'attendance_session_id' => $session->id,
@@ -201,14 +204,93 @@ class EloquentModelsTest extends TestCase
         ]);
 
         $this->assertNull($session->opened_by);
+        $this->assertNull($session->cancelled_by);
+        $this->assertNull($session->closed_by);
         $this->assertNull($record->recorded_by);
 
         $session->opened_by = $user->id;
+        $session->cancelled_by = $user->id;
+        $session->closed_by = $user->id;
         $session->save();
         $record->recorded_by = $user->id;
         $record->save();
 
         $this->assertSame($user->id, $session->openedBy()->first()->id);
+        $this->assertSame($user->id, $session->cancelledBy()->first()->id);
+        $this->assertSame($user->id, $session->closedBy()->first()->id);
         $this->assertSame($user->id, $record->recordedBy()->first()->id);
+    }
+
+    public function test_attendance_session_lifecycle_relationships_and_mass_assignment(): void
+    {
+        $course = Course::query()->create([
+            'code' => 'CS104',
+            'name' => 'Jaringan Komputer',
+        ]);
+        $section = CourseSection::query()->create([
+            'course_id' => $course->id,
+            'name' => 'D',
+            'academic_year' => '2026/2027',
+            'semester' => 'ganjil',
+        ]);
+        $lecturer = User::factory()->create(['role' => 'dosen']);
+
+        $originalSession = AttendanceSession::query()->create([
+            'course_section_id' => $section->id,
+            'session_type' => 'teori',
+            'delivery_mode' => 'onsite',
+            'title' => 'Pertemuan Asli',
+            'starts_at' => '2026-11-10 08:00:00',
+            'ends_at' => '2026-11-10 10:00:00',
+            'attendance_opens_at' => '2026-11-10 07:45:00',
+            'attendance_closes_at' => '2026-11-10 10:15:00',
+            'allowed_methods' => ['qr_code'],
+            'status' => 'ditutup',
+            'session_kind' => 'regular',
+            'cancellation_reason' => 'Dosen dinas luar',
+        ]);
+
+        $originalSession->cancelled_by = $lecturer->id;
+        $originalSession->cancelled_at = '2026-11-09 15:00:00';
+        $originalSession->save();
+
+        $replacementSession = AttendanceSession::query()->create([
+            'course_section_id' => $section->id,
+            'session_type' => 'teori',
+            'delivery_mode' => 'online',
+            'title' => 'Pertemuan Pengganti',
+            'starts_at' => '2026-11-12 13:00:00',
+            'ends_at' => '2026-11-12 15:00:00',
+            'attendance_opens_at' => '2026-11-12 12:45:00',
+            'attendance_closes_at' => '2026-11-12 15:15:00',
+            'allowed_methods' => ['qr_code'],
+            'status' => 'ditutup',
+            'session_kind' => 'replacement',
+            'original_session_id' => $originalSession->id,
+            'replacement_category' => 'jadwal_pengganti',
+            'late_after_minutes' => 15,
+        ]);
+
+        $replacementSession->opened_by = $lecturer->id;
+        $replacementSession->opened_at = '2026-11-12 12:45:00';
+        $replacementSession->closed_by = $lecturer->id;
+        $replacementSession->closed_at = '2026-11-12 15:15:00';
+        $replacementSession->save();
+
+        $this->assertSame($originalSession->id, $replacementSession->originalSession->id);
+        $this->assertSame($replacementSession->id, $originalSession->replacementSessions->first()->id);
+        $this->assertSame($lecturer->id, $originalSession->cancelledBy->id);
+        $this->assertSame($lecturer->id, $replacementSession->openedBy->id);
+        $this->assertSame($lecturer->id, $replacementSession->closedBy->id);
+
+        $this->assertSame('replacement', $replacementSession->session_kind);
+        $this->assertSame('jadwal_pengganti', $replacementSession->replacement_category);
+        $this->assertSame('Dosen dinas luar', $originalSession->cancellation_reason);
+        $this->assertSame(15, $replacementSession->late_after_minutes);
+        $this->assertIsInt($replacementSession->late_after_minutes);
+
+        $this->assertInstanceOf(Carbon::class, $originalSession->cancelled_at);
+        $this->assertInstanceOf(Carbon::class, $replacementSession->opened_at);
+        $this->assertInstanceOf(Carbon::class, $replacementSession->closed_at);
     }
 }

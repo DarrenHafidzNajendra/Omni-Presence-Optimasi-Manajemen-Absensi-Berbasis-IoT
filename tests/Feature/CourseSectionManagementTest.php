@@ -40,7 +40,8 @@ class CourseSectionManagementTest extends TestCase
         $this->actingAs($admin)->get(route('course-sections.index'))
             ->assertOk()
             ->assertSeeText('Daftar Kelas')
-            ->assertSeeText('Tambah Kelas');
+            ->assertSeeText('Tambah Kelas')
+            ->assertSee('href="'.route('academic-periods.index').'"', false);
 
         $this->actingAs($admin)->get(route('course-sections.create'))
             ->assertOk()
@@ -73,6 +74,8 @@ class CourseSectionManagementTest extends TestCase
             ->assertSeeText('2026/2027')
             ->assertSeeText('Genap')
             ->assertSeeText('Aktif')
+            ->assertSee('href="'.route('course-sections.attendance-sessions.index', $courseSection).'"', false)
+            ->assertSeeText('Kelola Sesi Absensi')
             ->assertSee('href="'.route('course-sections.edit', $courseSection).'"', false);
 
         $this->actingAs($admin)->get(route('course-sections.edit', $courseSection))
@@ -112,10 +115,14 @@ class CourseSectionManagementTest extends TestCase
 
     public function test_non_admin_users_cannot_access_course_section_pages(): void
     {
+        $student = User::factory()->create(['role' => 'mahasiswa']);
+        $this->actingAs($student)->get(route('course-sections.index'))->assertForbidden();
+        $this->actingAs($student)->get(route('course-sections.create'))->assertForbidden();
+        $this->actingAs($student)->post(route('course-sections.store'))->assertForbidden();
+
         foreach (['dosen', 'mahasiswa'] as $role) {
             $user = User::factory()->create(['role' => $role]);
 
-            $this->actingAs($user)->get(route('course-sections.index'))->assertForbidden();
             $this->actingAs($user)->get(route('course-sections.create'))->assertForbidden();
             $this->actingAs($user)->post(route('course-sections.store'))->assertForbidden();
 
@@ -578,6 +585,27 @@ class CourseSectionManagementTest extends TestCase
             'id' => $courseSection->id,
             'academic_period_id' => $academicPeriod->id,
         ]);
+    }
+
+    public function test_course_section_index_renders_attendance_session_link(): void
+    {
+        $course = Course::query()->create(['code' => 'CS423', 'name' => 'Jaringan Komputer']);
+        $period = $this->createAcademicPeriod();
+        $section = CourseSection::query()->create([
+            'course_id' => $course->id,
+            'academic_period_id' => $period->id,
+            'name' => 'Kelas TI-3A',
+            'academic_year' => '2026/2027',
+            'semester' => 'ganjil',
+            'is_active' => true,
+        ]);
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $response = $this->actingAs($admin)->get(route('course-sections.index'));
+
+        $response->assertOk()
+            ->assertSeeText('Absensi')
+            ->assertSee(route('course-sections.attendance-sessions.index', $section), false);
     }
 
     /**
