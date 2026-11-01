@@ -9,7 +9,7 @@
                 <p class="text-sm font-semibold tracking-wide text-blue-700">ADMINISTRASI</p>
                 <h1 class="text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">Daftar Pengguna</h1>
                 <p class="max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-                    Lihat dan telusuri akun yang terdaftar di Omni-Presence.
+                    Lihat, telusuri, dan kelola status akun mahasiswa, dosen, serta admin yang terdaftar di Omni-Presence.
                 </p>
             </div>
             <a
@@ -32,40 +32,85 @@
             </div>
         @enderror
 
+        @error('delete')
+            <div role="alert" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">
+                {{ $message }}
+            </div>
+        @enderror
+
         <section aria-label="Pencarian dan filter pengguna" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-            <form method="GET" action="{{ route('users.index') }}" class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_14rem_auto] sm:items-end">
-                <div class="space-y-2">
-                    <label for="search" class="block text-sm font-medium text-slate-700">Cari nama atau identitas</label>
-                    <input
-                        id="search"
-                        name="search"
-                        type="search"
-                        value="{{ $search }}"
-                        placeholder="Masukkan nama, email, NIDN, atau NIM"
-                        class="block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
-                    >
+            <form method="GET" action="{{ route('users.index') }}" class="space-y-4">
+                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div class="space-y-1.5">
+                        <label for="search" class="block text-sm font-medium text-slate-700">Cari nama atau identitas</label>
+                        <input
+                            id="search"
+                            name="search"
+                            type="search"
+                            value="{{ $search }}"
+                            placeholder="Masukkan nama, email, NIDN, atau NIM"
+                            class="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                        >
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label for="role" class="block text-sm font-medium text-slate-700">Filter role</label>
+                        <select
+                            id="role"
+                            name="role"
+                            class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                        >
+                            <option value="">Semua role</option>
+                            @foreach ($roles as $value => $label)
+                                <option value="{{ $value }}" @selected($selectedRole === $value)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label for="course_section_id" class="block text-sm font-medium text-slate-700">Filter kelas</label>
+                        <select
+                            id="course_section_id"
+                            name="course_section_id"
+                            class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                        >
+                            <option value="">Semua kelas</option>
+                            @foreach ($courseSections ?? [] as $sectionOption)
+                                <option value="{{ $sectionOption->id }}" @selected((int) ($selectedCourseSectionId ?? 0) === (int) $sectionOption->id)>
+                                    {{ $sectionOption->name }}{{ $sectionOption->course ? ' - '.$sectionOption->course->code : '' }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label for="status" class="block text-sm font-medium text-slate-700">Status akun</label>
+                        <select
+                            id="status"
+                            name="status"
+                            class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                        >
+                            <option value="">Semua status</option>
+                            <option value="active" @selected(in_array($selectedStatus ?? '', ['active', 'aktif', '1'], true))>Aktif</option>
+                            <option value="inactive" @selected(in_array($selectedStatus ?? '', ['inactive', 'nonaktif', '0'], true))>Nonaktif</option>
+                        </select>
+                    </div>
                 </div>
 
-                <div class="space-y-2">
-                    <label for="role" class="block text-sm font-medium text-slate-700">Filter role</label>
-                    <select
-                        id="role"
-                        name="role"
-                        class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                <div class="flex flex-wrap items-center justify-end gap-2">
+                    <a
+                        href="{{ route('users.index') }}"
+                        class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                     >
-                        <option value="">Semua role</option>
-                        @foreach ($roles as $value => $label)
-                            <option value="{{ $value }}" @selected($selectedRole === $value)>{{ $label }}</option>
-                        @endforeach
-                    </select>
+                        Reset
+                    </a>
+                    <button
+                        type="submit"
+                        class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
+                    >
+                        Terapkan
+                    </button>
                 </div>
-
-                <button
-                    type="submit"
-                    class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
-                >
-                    Terapkan
-                </button>
             </form>
         </section>
 
@@ -73,7 +118,7 @@
             @if ($users->isEmpty())
                 <div class="px-6 py-12 text-center">
                     <h2 class="text-base font-semibold text-slate-900">Pengguna tidak ditemukan</h2>
-                    <p class="mt-2 text-sm text-slate-500">Coba ubah kata pencarian atau filter role.</p>
+                    <p class="mt-2 text-sm text-slate-500">Coba ubah kata pencarian, filter role, kelas, atau status akun.</p>
                     <a
                         href="{{ route('users.index') }}"
                         class="mt-5 inline-flex items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
@@ -87,9 +132,10 @@
                         <thead class="bg-slate-50">
                             <tr>
                                 <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Nama</th>
-                                <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Identitas</th>
+                                <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Identitas (NIM / NIDN / Email)</th>
                                 <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Role</th>
-                                <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
+                                <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Kelas Terdaftar</th>
+                                <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Status Akun</th>
                                 <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Aksi</th>
                             </tr>
                         </thead>
@@ -116,6 +162,19 @@
                                         <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
                                             {{ $roles[$user->role ?? ''] ?? 'Belum ditentukan' }}
                                         </span>
+                                    </td>
+                                    <td class="px-6 py-4 text-xs text-slate-600">
+                                        @if ($user->role === \App\Enums\UserRole::Mahasiswa->value)
+                                            @forelse ($user->enrollments as $enrollment)
+                                                <span class="mr-1 mb-1 inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                                                    {{ $enrollment->courseSection?->name ?? '-' }}{{ $enrollment->courseSection?->course ? ' ('.$enrollment->courseSection->course->code.')' : '' }}
+                                                </span>
+                                            @empty
+                                                <span class="text-slate-400">Belum terdaftar kelas</span>
+                                            @endforelse
+                                        @else
+                                            <span class="text-slate-400">-</span>
+                                        @endif
                                     </td>
                                     <td class="whitespace-nowrap px-6 py-4">
                                         <span @class([
@@ -158,6 +217,23 @@
                                                         {{ $user->is_active ? 'Nonaktifkan' : 'Aktifkan' }}
                                                     </button>
                                                 </form>
+
+                                                @if ($user->role === \App\Enums\UserRole::Mahasiswa->value && ($user->attendance_records_count ?? 0) === 0)
+                                                    <form
+                                                        method="POST"
+                                                        action="{{ route('users.destroy', $user) }}"
+                                                        onsubmit="return confirm('Hapus data mahasiswa ini secara permanen?')"
+                                                    >
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <button
+                                                            type="submit"
+                                                            class="inline-flex items-center justify-center rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 focus:outline-none focus:ring-4 focus:ring-red-500/15"
+                                                        >
+                                                            Hapus
+                                                        </button>
+                                                    </form>
+                                                @endif
                                             @endif
                                         </div>
                                     </td>

@@ -27,15 +27,67 @@
             </div>
         @endif
 
-        <section aria-label="Pencarian kelas" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-            <form method="GET" action="{{ route('course-sections.index') }}" class="flex flex-col gap-4 sm:flex-row sm:items-end">
-                <div class="flex-1 space-y-2">
-                    <label for="search" class="block text-sm font-medium text-slate-700">Cari nama kelas atau mata kuliah</label>
-                    <input id="search" name="search" type="search" value="{{ $search }}" placeholder="Masukkan nama kelas, kode, atau nama mata kuliah" class="block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15">
+        <section aria-label="Pencarian dan filter kelas" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <form method="GET" action="{{ route('course-sections.index') }}" class="space-y-4">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div class="space-y-1.5">
+                        <label for="academic_period_id" class="block text-sm font-medium text-slate-700">Periode Akademik</label>
+                        <select id="academic_period_id" name="academic_period_id" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15">
+                            <option value="all" @selected(($selectedAcademicPeriodId ?? 'all') === 'all')>Semua Periode Akademik</option>
+                            @foreach ($academicPeriods ?? [] as $period)
+                                <option value="{{ $period->id }}" @selected((string) ($selectedAcademicPeriodId ?? '') === (string) $period->id)>
+                                    {{ $period->name }}{{ $period->is_active ? ' (Aktif)' : '' }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label for="course_id" class="block text-sm font-medium text-slate-700">Mata Kuliah</label>
+                        <select id="course_id" name="course_id" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15">
+                            <option value="">Semua Mata Kuliah</option>
+                            @foreach ($courses ?? [] as $courseOption)
+                                <option value="{{ $courseOption->id }}" @selected((int) ($selectedCourseId ?? 0) === (int) $courseOption->id)>
+                                    {{ $courseOption->code }} - {{ $courseOption->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label for="section_name" class="block text-sm font-medium text-slate-700">Kelas</label>
+                        <input id="section_name" name="section_name" type="text" value="{{ $sectionName ?? '' }}" placeholder="Contoh: TI-3A" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15">
+                    </div>
+
+                    @if (auth()->user()->role === 'admin')
+                        <div class="space-y-1.5">
+                            <label for="lecturer_id" class="block text-sm font-medium text-slate-700">Dosen Pengampu</label>
+                            <select id="lecturer_id" name="lecturer_id" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15">
+                                <option value="">Semua Dosen</option>
+                                @foreach ($lecturers ?? [] as $lecturerOption)
+                                    <option value="{{ $lecturerOption->id }}" @selected((int) ($selectedLecturerId ?? 0) === (int) $lecturerOption->id)>
+                                        {{ $lecturerOption->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
                 </div>
-                <button type="submit" class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/25">
-                    Cari
-                </button>
+
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+                    <div class="flex-1 space-y-1.5">
+                        <label for="search" class="block text-sm font-medium text-slate-700">Cari nama kelas atau mata kuliah</label>
+                        <input id="search" name="search" type="search" value="{{ $search }}" placeholder="Masukkan nama kelas, kode, atau nama mata kuliah" class="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15">
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="submit" class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/25">
+                            Terapkan Filter
+                        </button>
+                        <a href="{{ route('course-sections.index', ['academic_period_id' => 'all']) }}" class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                            Reset
+                        </a>
+                    </div>
+                </div>
             </form>
         </section>
 
@@ -46,10 +98,10 @@
                         {{ auth()->user()->role === 'dosen' ? 'Anda belum ditugaskan ke kelas mana pun.' : 'Kelas tidak ditemukan' }}
                     </h2>
                     <p class="mt-2 text-sm text-slate-500">
-                        {{ auth()->user()->role === 'dosen' ? 'Silakan hubungi Administrator jika penugasan mengajar Anda belum tercatat.' : 'Coba ubah kata pencarian atau tambahkan kelas baru.' }}
+                        {{ auth()->user()->role === 'dosen' ? 'Silakan hubungi Administrator jika penugasan mengajar Anda belum tercatat.' : 'Coba ubah filter pencarian atau tambahkan kelas baru.' }}
                     </p>
                     @if (auth()->user()->role === 'admin')
-                        <a href="{{ route('course-sections.index') }}" class="mt-5 inline-flex items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                        <a href="{{ route('course-sections.index', ['academic_period_id' => 'all']) }}" class="mt-5 inline-flex items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
                             Lihat semua kelas
                         </a>
                     @endif
@@ -59,39 +111,61 @@
                     <table class="min-w-full divide-y divide-slate-200 text-left">
                         <thead class="bg-slate-50">
                             <tr>
-                                <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Mata Kuliah</th>
-                                <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Nama Kelas</th>
-                                <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Periode Akademik</th>
-                                <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Tahun Akademik</th>
-                                <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Semester</th>
-                                @if (auth()->user()->role === 'dosen')
-                                    <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Jadwal</th>
-                                @endif
-                                <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
-                                <th scope="col" class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Aksi</th>
+                                <th scope="col" class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Kelas</th>
+                                <th scope="col" class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Mata Kuliah</th>
+                                <th scope="col" class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Dosen Pengampu</th>
+                                <th scope="col" class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Hari</th>
+                                <th scope="col" class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Jam Mulai &amp; Selesai</th>
+                                <th scope="col" class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Ruangan / Mode</th>
+                                <th scope="col" class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Periode</th>
+                                <th scope="col" class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
+                                <th scope="col" class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Aksi</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             @foreach ($courseSections as $courseSection)
                                 <tr class="transition hover:bg-slate-50/70">
-                                    <td class="whitespace-nowrap px-6 py-4">
+                                    <td class="whitespace-nowrap px-5 py-4 text-sm font-semibold text-slate-900">{{ $courseSection->name }}</td>
+                                    <td class="whitespace-nowrap px-5 py-4">
                                         <span class="block text-sm font-semibold text-slate-900">{{ $courseSection->course->code }}</span>
                                         <span class="block text-sm text-slate-600">{{ $courseSection->course->name }}</span>
                                     </td>
-                                    <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-700">{{ $courseSection->name }}</td>
-                                    <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-700">{{ $courseSection->academicPeriod?->name ?? 'Belum ditentukan' }}</td>
-                                    <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-700">{{ $courseSection->academic_year }}</td>
-                                    <td class="whitespace-nowrap px-6 py-4 text-sm capitalize text-slate-700">{{ $courseSection->semester }}</td>
-                                    @if (auth()->user()->role === 'dosen')
-                                        <td class="px-6 py-4 text-xs text-slate-600">
-                                            @forelse ($courseSection->schedules as $schedule)
-                                                <div>{{ [1 => 'Senin', 2 => 'Selasa', 3 => 'Rabu', 4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu', 7 => 'Minggu'][$schedule->day_of_week] ?? '-' }}, {{ substr((string) $schedule->starts_at, 0, 5) }}-{{ substr((string) $schedule->ends_at, 0, 5) }} ({{ ucfirst($schedule->session_type) }})</div>
-                                            @empty
-                                                <span class="text-slate-400">Belum ada jadwal</span>
-                                            @endforelse
-                                        </td>
-                                    @endif
-                                    <td class="whitespace-nowrap px-6 py-4">
+                                    <td class="px-5 py-4 text-xs text-slate-700">
+                                        @forelse ($courseSection->lecturers as $assignment)
+                                            <div class="font-medium text-slate-900">{{ $assignment->user?->name ?? '-' }}</div>
+                                        @empty
+                                            <span class="text-slate-400">Belum ditugaskan</span>
+                                        @endforelse
+                                    </td>
+                                    <td class="whitespace-nowrap px-5 py-4 text-xs text-slate-700">
+                                        @forelse ($courseSection->schedules as $schedule)
+                                            <div class="font-medium text-slate-900">{{ $schedule->dayName() }}</div>
+                                        @empty
+                                            <span class="text-slate-400">Belum ada jadwal</span>
+                                        @endforelse
+                                    </td>
+                                    <td class="whitespace-nowrap px-5 py-4 text-xs text-slate-700">
+                                        @forelse ($courseSection->schedules as $schedule)
+                                            <div>{{ substr((string) $schedule->starts_at, 0, 5) }} - {{ substr((string) $schedule->ends_at, 0, 5) }} ({{ ucfirst($schedule->session_type) }})</div>
+                                        @empty
+                                            <span class="text-slate-400">-</span>
+                                        @endforelse
+                                    </td>
+                                    <td class="px-5 py-4 text-xs text-slate-700">
+                                        @forelse ($courseSection->schedules as $schedule)
+                                            <div>
+                                                <span class="font-medium capitalize text-slate-900">{{ $schedule->delivery_mode }}</span>
+                                                &middot; {{ $schedule->delivery_mode === 'online' ? ($schedule->meeting_url ?? 'Online') : ($schedule->location ?? '-') }}
+                                            </div>
+                                        @empty
+                                            <span class="text-slate-400">-</span>
+                                        @endforelse
+                                    </td>
+                                    <td class="whitespace-nowrap px-5 py-4 text-xs text-slate-700">
+                                        <span class="block font-medium text-slate-900">{{ $courseSection->academicPeriod?->name ?? 'Belum ditentukan' }}</span>
+                                        <span class="block text-slate-500">{{ $courseSection->academic_year }} &middot; <span class="capitalize">{{ $courseSection->semester }}</span></span>
+                                    </td>
+                                    <td class="whitespace-nowrap px-5 py-4">
                                         <span @class([
                                             'inline-flex rounded-full px-2.5 py-1 text-xs font-medium',
                                             'bg-emerald-100 text-emerald-800' => $courseSection->is_active,
@@ -100,7 +174,7 @@
                                             {{ $courseSection->is_active ? 'Aktif' : 'Nonaktif' }}
                                         </span>
                                     </td>
-                                    <td class="whitespace-nowrap px-6 py-4">
+                                    <td class="whitespace-nowrap px-5 py-4">
                                         <div class="flex min-w-max flex-wrap items-center gap-2">
                                             <a
                                                 href="{{ route('course-sections.attendance-sessions.index', $courseSection) }}"
@@ -115,6 +189,12 @@
                                                 Rekap
                                             </a>
                                             @if (auth()->user()->role === 'admin')
+                                                <a
+                                                    href="{{ route('course-sections.schedules.index', $courseSection) }}"
+                                                    class="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-500/15"
+                                                >
+                                                    Jadwal
+                                                </a>
                                                 <a
                                                     href="{{ route('course-sections.show', $courseSection) }}"
                                                     class="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-500/15"

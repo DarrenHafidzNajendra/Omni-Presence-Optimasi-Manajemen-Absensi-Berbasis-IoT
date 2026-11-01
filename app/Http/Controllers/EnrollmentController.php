@@ -2,10 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\UserRole;
 use App\Models\CourseSection;
 use App\Models\Enrollment;
-use App\Models\User;
-use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -19,33 +18,35 @@ class EnrollmentController extends Controller
 
     public function store(Request $request, CourseSection $courseSection): RedirectResponse
     {
-        if (! $courseSection->is_active) {
-            return back()
-                ->withErrors(['student_id' => 'Mahasiswa tidak dapat didaftarkan ke kelas nonaktif.'])
-                ->withInput();
+        abort(403, 'Pendaftaran mata kuliah manual oleh Admin telah dinonaktifkan. Mahasiswa harus melakukan enrollment mandiri melalui akun masing-masing.');
+    }
+
+    public function enrollSelf(Request $request, CourseSection $courseSection): RedirectResponse
+    {
+        $student = $request->user();
+
+        if (! $student || $student->role !== UserRole::Mahasiswa->value || ! $student->is_active) {
+            abort(403, 'Hanya mahasiswa aktif yang dapat melakukan enrollment mandiri.');
         }
 
-        $validated = $request->validate([
-            'student_id' => [
-                'required',
-                'integer',
-                Rule::exists(User::class, 'id')->where(function (QueryBuilder $query): void {
-                    $query->where('role', 'mahasiswa')
-                        ->where('is_active', true);
-                }),
-                Rule::unique(Enrollment::class, 'student_id')
-                    ->where('course_section_id', $courseSection->id),
-            ],
-        ]);
+        if (! $courseSection->is_active) {
+            return back()
+                ->withErrors(['enrollment' => 'Anda tidak dapat mendaftar ke kelas yang sedang nonaktif.']);
+        }
+
+        if ($courseSection->enrollments()->where('student_id', $student->id)->exists()) {
+            return back()
+                ->withErrors(['enrollment' => 'Anda sudah terdaftar pada kelas ini.']);
+        }
 
         $courseSection->enrollments()->create([
-            'student_id' => $validated['student_id'],
+            'student_id' => $student->id,
             'status' => 'aktif',
         ]);
 
         return redirect()
-            ->route('course-sections.show', $courseSection)
-            ->with('success', 'Mahasiswa berhasil didaftarkan ke kelas.');
+            ->route('dashboard')
+            ->with('success', 'Anda berhasil mendaftar ke kelas '.$courseSection->name.'.');
     }
 
     public function updateStatus(Request $request, CourseSection $courseSection, Enrollment $enrollment): RedirectResponse

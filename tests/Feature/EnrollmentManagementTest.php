@@ -20,9 +20,11 @@ class EnrollmentManagementTest extends TestCase
             ->assertRedirectToRoute('login');
         $this->post(route('course-sections.enrollments.store', $courseSection))
             ->assertRedirectToRoute('login');
+        $this->post(route('student.course-sections.enroll', $courseSection))
+            ->assertRedirectToRoute('login');
     }
 
-    public function test_only_admin_can_manage_enrollments(): void
+    public function test_only_admin_can_access_admin_enrollment_management_routes(): void
     {
         $courseSection = $this->createCourseSection();
 
@@ -38,7 +40,7 @@ class EnrollmentManagementTest extends TestCase
         }
     }
 
-    public function test_admin_can_view_enrollments_and_empty_state(): void
+    public function test_admin_can_view_enrollments_and_manual_enrollment_form_is_removed(): void
     {
         $courseSection = $this->createCourseSection();
         $admin = User::factory()->create(['role' => 'admin']);
@@ -50,10 +52,12 @@ class EnrollmentManagementTest extends TestCase
         $this->actingAs($admin)
             ->get(route('course-sections.show', $courseSection))
             ->assertOk()
-            ->assertSeeText('Belum ada mahasiswa terdaftar.');
+            ->assertSeeText('Belum ada mahasiswa terdaftar.')
+            ->assertDontSeeText('Daftarkan Mahasiswa')
+            ->assertDontSee(route('course-sections.enrollments.store', $courseSection), false);
     }
 
-    public function test_admin_can_enroll_an_active_student(): void
+    public function test_admin_manual_enrollment_endpoint_is_disabled_with_forbidden_response(): void
     {
         $courseSection = $this->createCourseSection();
         $admin = User::factory()->create(['role' => 'admin']);
@@ -63,41 +67,10 @@ class EnrollmentManagementTest extends TestCase
             'name' => 'Mahasiswa Aktif',
         ]);
 
-        $response = $this->actingAs($admin)->post(
+        $this->actingAs($admin)->post(
             route('course-sections.enrollments.store', $courseSection),
             ['student_id' => $student->id],
-        );
-
-        $response->assertRedirectToRoute('course-sections.show', $courseSection)
-            ->assertSessionHas('success', 'Mahasiswa berhasil didaftarkan ke kelas.');
-        $this->assertDatabaseHas('enrollments', [
-            'course_section_id' => $courseSection->id,
-            'student_id' => $student->id,
-            'status' => 'aktif',
-        ]);
-        $this->assertTrue($student->enrollments()->where('course_section_id', $courseSection->id)->exists());
-
-        $this->actingAs($admin)->get(route('course-sections.show', $courseSection))
-            ->assertSeeText('Mahasiswa Aktif')
-            ->assertSeeText('2026000001');
-    }
-
-    public function test_admin_cannot_enroll_a_student_in_an_inactive_course_section(): void
-    {
-        $courseSection = $this->createCourseSection();
-        $courseSection->update(['is_active' => false]);
-        $admin = User::factory()->create(['role' => 'admin']);
-        $student = User::factory()->create(['role' => 'mahasiswa']);
-
-        $this->actingAs($admin)
-            ->from(route('course-sections.show', $courseSection))
-            ->post(route('course-sections.enrollments.store', $courseSection), [
-                'student_id' => $student->id,
-            ])
-            ->assertRedirect(route('course-sections.show', $courseSection))
-            ->assertSessionHasErrors([
-                'student_id' => 'Mahasiswa tidak dapat didaftarkan ke kelas nonaktif.',
-            ]);
+        )->assertForbidden();
 
         $this->assertDatabaseMissing('enrollments', [
             'course_section_id' => $courseSection->id,
@@ -105,53 +78,95 @@ class EnrollmentManagementTest extends TestCase
         ]);
     }
 
-    public function test_only_students_can_be_enrolled(): void
+    public function test_active_student_can_self_enroll_into_active_course_section(): void
     {
         $courseSection = $this->createCourseSection();
-        $admin = User::factory()->create(['role' => 'admin']);
-        $dosen = User::factory()->create(['role' => 'dosen']);
-
-        $this->actingAs($admin)
-            ->from(route('course-sections.show', $courseSection))
-            ->post(route('course-sections.enrollments.store', $courseSection), [
-                'student_id' => $dosen->id,
-            ])
-            ->assertRedirect(route('course-sections.show', $courseSection))
-            ->assertSessionHasErrors('student_id');
-    }
-
-    public function test_inactive_student_cannot_be_enrolled(): void
-    {
-        $courseSection = $this->createCourseSection();
-        $admin = User::factory()->create(['role' => 'admin']);
         $student = User::factory()->create([
             'role' => 'mahasiswa',
-            'is_active' => false,
+            'nim' => '2026000001',
+            'name' => 'Mahasiswa Mandiri',
+            'is_active' => true,
         ]);
 
-        $this->actingAs($admin)
-            ->from(route('course-sections.show', $courseSection))
-            ->post(route('course-sections.enrollments.store', $courseSection), [
-                'student_id' => $student->id,
-            ])
-            ->assertRedirect(route('course-sections.show', $courseSection))
-            ->assertSessionHasErrors('student_id');
+        // Dashboard mahasiswa menampilkan opsi enrollment mandiri
+        $this->actingAs($student)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSeeText('Enrollment mandiri mata kuliah')
+            ->assertSeeText($courseSection->name)
+            ->assertSee(route('student.course-sections.enroll', $courseSection), false);
+
+        $response = $this->actingAs($student)
+            ->post(route('student.course-sections.enroll', $courseSection));
+
+        $response->assertRedirectToRoute('dashboard')
+            ->assertSessionHas('success', 'Anda berhasil mendaftar ke kelas '.$courseSection->name.'.');
+
+        $this->assertDatabaseHas('enrollments', [
+            'course_section_id' => $courseSection->id,
+            'student_id' => $student->id,
+            'status' => 'aktif',
+        ]);
+
+        // Admin tetap dapat melihat mahasiswa yang sudah terdaftar pada detail kelas
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin)->get(route('course-sections.show', $courseSection))
+            ->assertOk()
+            ->assertSeeText('Mahasiswa Mandiri')
+            ->assertSeeText('2026000001');
     }
 
-    public function test_duplicate_enrollment_is_rejected(): void
+    public function test_student_cannot_self_enroll_into_inactive_course_section_or_duplicate(): void
+    {
+        $inactiveSection = $this->createCourseSection();
+        $inactiveSection->update(['is_active' => false]);
+
+        $activeSection = $this->createCourseSection();
+
+        $student = User::factory()->create([
+            'role' => 'mahasiswa',
+            'nim' => '2026000002',
+            'is_active' => true,
+        ]);
+
+        // 1. Kelas nonaktif ditolak
+        $this->actingAs($student)
+            ->from(route('dashboard'))
+            ->post(route('student.course-sections.enroll', $inactiveSection))
+            ->assertRedirect(route('dashboard'))
+            ->assertSessionHasErrors('enrollment');
+
+        $this->assertDatabaseMissing('enrollments', [
+            'course_section_id' => $inactiveSection->id,
+            'student_id' => $student->id,
+        ]);
+
+        // 2. Enrollment pertama ke kelas aktif berhasil
+        $this->actingAs($student)
+            ->post(route('student.course-sections.enroll', $activeSection))
+            ->assertRedirectToRoute('dashboard');
+
+        // 3. Enrollment kedua (duplikat) ke kelas yang sama ditolak
+        $this->actingAs($student)
+            ->from(route('dashboard'))
+            ->post(route('student.course-sections.enroll', $activeSection))
+            ->assertRedirect(route('dashboard'))
+            ->assertSessionHasErrors('enrollment');
+
+        $this->assertSame(1, $activeSection->enrollments()->where('student_id', $student->id)->count());
+    }
+
+    public function test_admin_and_lecturer_cannot_use_student_self_enrollment_route(): void
     {
         $courseSection = $this->createCourseSection();
-        $admin = User::factory()->create(['role' => 'admin']);
-        $student = User::factory()->create(['role' => 'mahasiswa']);
-        $courseSection->enrollments()->create(['student_id' => $student->id, 'status' => 'aktif']);
 
-        $this->actingAs($admin)
-            ->from(route('course-sections.show', $courseSection))
-            ->post(route('course-sections.enrollments.store', $courseSection), [
-                'student_id' => $student->id,
-            ])
-            ->assertRedirect(route('course-sections.show', $courseSection))
-            ->assertSessionHasErrors('student_id');
+        foreach (['admin', 'dosen'] as $role) {
+            $user = User::factory()->create(['role' => $role]);
+
+            $this->actingAs($user)
+                ->post(route('student.course-sections.enroll', $courseSection))
+                ->assertForbidden();
+        }
     }
 
     public function test_enrollment_status_is_validated(): void

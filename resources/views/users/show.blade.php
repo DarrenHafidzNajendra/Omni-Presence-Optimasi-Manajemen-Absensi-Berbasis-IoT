@@ -21,6 +21,12 @@
             </p>
         </section>
 
+        @error('delete')
+            <div role="alert" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">
+                {{ $message }}
+            </div>
+        @enderror
+
         <section aria-label="Informasi pengguna" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <dl class="divide-y divide-slate-100">
                 <div class="grid gap-2 px-5 py-4 sm:grid-cols-[12rem_minmax(0,1fr)] sm:gap-6 sm:px-8">
@@ -51,6 +57,20 @@
                     <dt class="text-sm font-medium text-slate-500">{{ $identity['label'] }}</dt>
                     <dd class="break-all text-sm text-slate-900">{{ $identity['value'] ?? 'Belum ditentukan' }}</dd>
                 </div>
+                @if ($user->role === \App\Enums\UserRole::Mahasiswa->value)
+                    <div class="grid gap-2 px-5 py-4 sm:grid-cols-[12rem_minmax(0,1fr)] sm:gap-6 sm:px-8">
+                        <dt class="text-sm font-medium text-slate-500">Kelas terdaftar</dt>
+                        <dd class="text-sm text-slate-900">
+                            @forelse ($user->enrollments ?? [] as $enrollment)
+                                <span class="mr-1 mb-1 inline-flex items-center rounded-md bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+                                    {{ $enrollment->courseSection?->name ?? '-' }}{{ $enrollment->courseSection?->course ? ' ('.$enrollment->courseSection->course->code.')' : '' }}
+                                </span>
+                            @empty
+                                <span class="text-slate-500">Belum terdaftar kelas</span>
+                            @endforelse
+                        </dd>
+                    </div>
+                @endif
             </dl>
         </section>
 
@@ -61,12 +81,30 @@
             >
                 Kembali ke Daftar
             </a>
-            <a
-                href="{{ route('users.edit', $user) }}"
-                class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
-            >
-                Edit Pengguna
-            </a>
+            <div class="flex flex-wrap items-center gap-3">
+                <a
+                    href="{{ route('users.edit', $user) }}"
+                    class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
+                >
+                    Edit Pengguna
+                </a>
+                @if ($user->role === \App\Enums\UserRole::Mahasiswa->value && ! $user->attendanceRecords()->exists())
+                    <form
+                        method="POST"
+                        action="{{ route('users.destroy', $user) }}"
+                        onsubmit="return confirm('Hapus data mahasiswa ini secara permanen?')"
+                    >
+                        @csrf
+                        @method('DELETE')
+                        <button
+                            type="submit"
+                            class="inline-flex items-center justify-center rounded-lg border border-red-300 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-100 focus:outline-none focus:ring-4 focus:ring-red-500/15"
+                        >
+                            Hapus Mahasiswa
+                        </button>
+                    </form>
+                @endif
+            </div>
         </div>
     </div>
 @endsection

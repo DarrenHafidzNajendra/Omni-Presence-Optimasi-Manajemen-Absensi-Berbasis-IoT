@@ -18,6 +18,8 @@ use InvalidArgumentException;
 
 class AttendanceSession extends Model
 {
+    public const MAX_DURATION_HOURS = 24;
+
     protected $fillable = [
         'class_schedule_id',
         'course_section_id',
@@ -141,39 +143,29 @@ class AttendanceSession extends Model
         return $this->session_kind === 'replacement';
     }
 
-    /**
-     * @throws AuthorizationException
-     * @throws DomainException
-     */
-    public function open(User $user, ?DateTimeInterface $now = null): self
+    public function isExpiredAt(?DateTimeInterface $now = null): bool
     {
-        Gate::forUser($user)->authorize('open', $this);
-
-        if ($this->isCancelled()) {
-            throw new DomainException('Sesi absensi yang telah dibatalkan tidak dapat dibuka.');
-        }
-
-        if ($this->isClosed()) {
-            throw new DomainException('Sesi absensi yang sudah ditutup tidak dapat dibuka kembali.');
-        }
-
-        if (! $this->isScheduled()) {
-            throw new DomainException("Hanya sesi berstatus 'terjadwal' yang dapat dibuka (status saat ini: {$this->status}).");
+        if ($this->isCancelled() || $this->isClosed()) {
+            return false;
         }
 
         $currentTime = $now ? Carbon::parse($now)->shiftTimezone('Asia/Jakarta') : Carbon::now('Asia/Jakarta');
-        $opensAt = Carbon::parse($this->attendance_opens_at)->shiftTimezone('Asia/Jakarta');
-        $closesAt = Carbon::parse($this->attendance_closes_at)->shiftTimezone('Asia/Jakarta');
 
-        if ($currentTime->lt($opensAt)) {
-            throw new DomainException("Sesi absensi belum dapat dibuka sebelum waktu pembukaan ({$opensAt->toDateTimeString()}).");
+        if ($this->starts_at !== null) {
+            $maxWindowCutoff = Carbon::parse($this->starts_at)->shiftTimezone('Asia/Jakarta')->addHours(self::MAX_DURATION_HOURS);
+            if ($currentTime->gte($maxWindowCutoff)) {
+                return true;
+            }
         }
 
-        if ($currentTime->gt($closesAt)) {
-            throw new DomainException("Batas waktu absensi untuk sesi ini telah berakhir ({$closesAt->toDateTimeString()}).");
+        if ($this->attendance_closes_at !== null) {
+            $closesAt = Carbon::parse($this->attendance_closes_at)->shiftTimezone('Asia/Jakarta');
+            if ($currentTime->gte($closesAt)) {
+                return true;
+            }
         }
 
-        if ($this->isReplacement()) {
+        if ($this->isReplacement() && $this->isScheduled()) {
             $section = $this->courseSection;
             $academicPeriod = $section?->academicPeriod;
             if ($academicPeriod) {
@@ -183,22 +175,270 @@ class AttendanceSession extends Model
                 if ($periodEndsOn) {
                     $periodCutoff = Carbon::parse($periodEndsOn)->shiftTimezone('Asia/Jakarta')->endOfDay();
                     if ($currentTime->gt($periodCutoff)) {
-                        throw new DomainException(sprintf(
-                            'Batas waktu periode pengganti %s telah berakhir (%s). Sesi tidak dapat dibuka.',
-                            strtoupper((string) $category),
-                            $periodEndsOn->format('d/m/Y')
-                        ));
+                        return true;
                     }
                 }
             }
         }
 
-        $this->status = 'terbuka';
-        $this->opened_at = $currentTime;
-        $this->opened_by = $user->getKey();
-        $this->save();
+        return false;
+    }
 
-        return $this;
+    public function canBeOpenedAt(?DateTimeInterface $now = null): bool
+    {
+        if (! $this->isScheduled() || $this->isCancelled()) {
+            return false;
+        }
+
+        $currentTime = $now ? Carbon::parse($now)->shiftTimezone('Asia/Jakarta') : Carbon::now('Asia/Jakarta');
+
+        if ($this->isExpiredAt($currentTime)) {
+            return false;
+        }
+
+        if ($this->class_schedule_id !== null && $this->starts_at !== null) {
+            $startsAt = Carbon::parse($this->starts_at)->shiftTimezone('Asia/Jakarta');
+            if ($currentTime->lt($startsAt)) {
+                return false;
+            }
+        }
+
+        if ($this->attendance_opens_at !== null) {
+            $opensAt = Carbon::parse($this->attendance_opens_at)->shiftTimezone('Asia/Jakarta');
+            if ($currentTime->lt($opensAt)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public function displayStatus(?DateTimeInterface $now = null): string
+    {
+        if ($this->isCancelled()) {
+            return 'dibatalkan';
+        }
+
+        if ($this->isClosed()) {
+            return 'ditutup';
+        }
+
+        if ($this->isExpiredAt($now)) {
+            return 'kedaluwarsa';
+        }
+
+        return (string) $this->status;
+    }
+
+    /**
+     * @param  array<string, mixed>  $options
+     *
+     * @throws AuthorizationException
+     * @throws DomainException
+     * @throws InvalidArgumentException
+     */
+    public static function openFromSchedule(ClassSchedule $schedule, User $user, array $options = [], ?DateTimeInterface $now = null): self
+    {
+        $section = $schedule->courseSection;
+        if (! $section) {
+            throw new InvalidArgumentException('Jadwal perkuliahan tidak memiliki kelas yang valid.');
+        }
+
+        Gate::forUser($user)->authorize('create', [self::class, $section]);
+
+        if (! $schedule->is_active) {
+            throw new DomainException('Jadwal perkuliahan sedang tidak aktif.');
+        }
+
+        $currentTime = $now ? Carbon::parse($now)->shiftTimezone('Asia/Jakarta') : Carbon::now('Asia/Jakarta');
+        $meetingDate = $schedule->resolveActiveMeetingDate($currentTime);
+
+        if ($meetingDate === null) {
+            throw new DomainException('Sesi absensi belum dapat dibuka sebelum jadwal dimulai atau di luar hari jadwal perkuliahan.');
+        }
+
+        $startsAt = $schedule->startsAtOnDate($meetingDate);
+        $endsAt = $schedule->endsAtOnDate($meetingDate);
+        $maxClosesAt = $startsAt->copy()->addHours(self::MAX_DURATION_HOURS);
+
+        if ($currentTime->lt($startsAt)) {
+            throw new DomainException("Sesi absensi belum dapat dibuka sebelum waktu mulai jadwal ({$startsAt->toDateTimeString()}).");
+        }
+
+        if ($currentTime->gte($maxClosesAt)) {
+            throw new DomainException("Batas waktu 24 jam absensi untuk jadwal ini telah berakhir ({$maxClosesAt->toDateTimeString()}).");
+        }
+
+        return DB::transaction(function () use ($schedule, $section, $user, $options, $currentTime, $startsAt, $endsAt, $maxClosesAt): self {
+            ClassSchedule::query()->whereKey($schedule->getKey())->lockForUpdate()->first();
+
+            $existingSessions = self::query()
+                ->where('course_section_id', $section->getKey())
+                ->where(function (Builder $query) use ($schedule, $startsAt): void {
+                    $query->where(function (Builder $q) use ($schedule, $startsAt): void {
+                        $q->where('class_schedule_id', $schedule->getKey())
+                            ->whereBetween('starts_at', [
+                                $startsAt->copy()->startOfDay(),
+                                $startsAt->copy()->endOfDay(),
+                            ]);
+                    })->orWhere(function (Builder $q) use ($startsAt): void {
+                        $q->where('session_kind', 'regular')
+                            ->where('starts_at', $startsAt);
+                    });
+                })
+                ->lockForUpdate()
+                ->orderByDesc('id')
+                ->get();
+
+            $nonCancelled = $existingSessions->first(fn (self $session): bool => ! $session->isCancelled());
+
+            if ($nonCancelled !== null) {
+                if ($nonCancelled->isClosed()) {
+                    throw new DomainException('Sesi absensi yang sudah ditutup tidak dapat dibuka kembali.');
+                }
+
+                if ($nonCancelled->isOpen()) {
+                    throw new DomainException('Sesi absensi untuk jadwal dan tanggal pertemuan ini sudah dibuka.');
+                }
+
+                if ($nonCancelled->isScheduled()) {
+                    if ($nonCancelled->class_schedule_id === null) {
+                        $nonCancelled->class_schedule_id = $schedule->getKey();
+                    }
+
+                    if ($nonCancelled->attendance_closes_at->lt($currentTime) && $currentTime->lt($maxClosesAt)) {
+                        $nonCancelled->attendance_closes_at = $maxClosesAt;
+                    }
+
+                    $nonCancelled->save();
+
+                    return $nonCancelled->open($user, $currentTime);
+                }
+            }
+
+            if ($existingSessions->isNotEmpty()) {
+                throw new DomainException('Sesi absensi yang telah dibatalkan tidak dapat dibuka.');
+            }
+
+            $meetingNumber = self::query()
+                ->where('course_section_id', $section->getKey())
+                ->whereNull('cancelled_at')
+                ->count() + 1;
+
+            $title = isset($options['title']) && trim((string) $options['title']) !== ''
+                ? trim((string) $options['title'])
+                : "Pertemuan {$meetingNumber}";
+
+            $allowedMethods = isset($options['allowed_methods']) && is_array($options['allowed_methods']) && count($options['allowed_methods']) > 0
+                ? array_values($options['allowed_methods'])
+                : ['manual', 'qr_code', 'face_recognition'];
+
+            $lateAfterMinutes = array_key_exists('late_after_minutes', $options)
+                ? $options['late_after_minutes']
+                : 15;
+
+            $session = new self([
+                'class_schedule_id' => $schedule->getKey(),
+                'course_section_id' => $section->getKey(),
+                'session_type' => $schedule->session_type,
+                'delivery_mode' => $schedule->delivery_mode,
+                'title' => $title,
+                'starts_at' => $startsAt,
+                'ends_at' => $endsAt,
+                'attendance_opens_at' => $startsAt,
+                'attendance_closes_at' => $maxClosesAt,
+                'allowed_methods' => $allowedMethods,
+                'status' => 'terbuka',
+                'session_kind' => 'regular',
+                'late_after_minutes' => $lateAfterMinutes,
+            ]);
+            $session->opened_at = $currentTime;
+            $session->opened_by = $user->getKey();
+            $session->save();
+
+            return $session;
+        });
+    }
+
+    /**
+     * @throws AuthorizationException
+     * @throws DomainException
+     */
+    public function open(User $user, ?DateTimeInterface $now = null): self
+    {
+        Gate::forUser($user)->authorize('open', $this);
+
+        $currentTime = $now ? Carbon::parse($now)->shiftTimezone('Asia/Jakarta') : Carbon::now('Asia/Jakarta');
+
+        return DB::transaction(function () use ($user, $currentTime): self {
+            $lockedSession = self::query()->whereKey($this->getKey())->lockForUpdate()->firstOrFail();
+
+            if ($lockedSession->isCancelled()) {
+                throw new DomainException('Sesi absensi yang telah dibatalkan tidak dapat dibuka.');
+            }
+
+            if ($lockedSession->isClosed()) {
+                throw new DomainException('Sesi absensi yang sudah ditutup tidak dapat dibuka kembali.');
+            }
+
+            if (! $lockedSession->isScheduled()) {
+                throw new DomainException("Hanya sesi berstatus 'terjadwal' yang dapat dibuka (status saat ini: {$lockedSession->status}).");
+            }
+
+            $opensAt = Carbon::parse($lockedSession->attendance_opens_at)->shiftTimezone('Asia/Jakarta');
+            $closesAt = Carbon::parse($lockedSession->attendance_closes_at)->shiftTimezone('Asia/Jakarta');
+
+            if ($lockedSession->class_schedule_id !== null && $lockedSession->starts_at !== null) {
+                $startsAt = Carbon::parse($lockedSession->starts_at)->shiftTimezone('Asia/Jakarta');
+                if ($currentTime->lt($startsAt)) {
+                    throw new DomainException("Sesi absensi belum dapat dibuka sebelum waktu mulai jadwal ({$startsAt->toDateTimeString()}).");
+                }
+            }
+
+            if ($currentTime->lt($opensAt)) {
+                throw new DomainException("Sesi absensi belum dapat dibuka sebelum waktu pembukaan ({$opensAt->toDateTimeString()}).");
+            }
+
+            if ($currentTime->gt($closesAt)) {
+                throw new DomainException("Batas waktu absensi untuk sesi ini telah berakhir ({$closesAt->toDateTimeString()}).");
+            }
+
+            if ($lockedSession->isReplacement()) {
+                $section = $lockedSession->courseSection;
+                $academicPeriod = $section?->academicPeriod;
+                if ($academicPeriod) {
+                    $category = $lockedSession->replacement_category;
+                    $periodEndsOn = $category === 'ats' ? $academicPeriod->ats_replacement_ends_on : $academicPeriod->uas_replacement_ends_on;
+
+                    if ($periodEndsOn) {
+                        $periodCutoff = Carbon::parse($periodEndsOn)->shiftTimezone('Asia/Jakarta')->endOfDay();
+                        if ($currentTime->gt($periodCutoff)) {
+                            throw new DomainException(sprintf(
+                                'Batas waktu periode pengganti %s telah berakhir (%s). Sesi tidak dapat dibuka.',
+                                strtoupper((string) $category),
+                                $periodEndsOn->format('d/m/Y')
+                            ));
+                        }
+                    }
+                }
+            }
+
+            if ($lockedSession->starts_at !== null) {
+                $maxWindowCutoff = Carbon::parse($lockedSession->starts_at)->shiftTimezone('Asia/Jakarta')->addHours(self::MAX_DURATION_HOURS);
+                if ($currentTime->gte($maxWindowCutoff)) {
+                    throw new DomainException("Batas waktu absensi untuk sesi ini telah berakhir ({$maxWindowCutoff->toDateTimeString()}).");
+                }
+            }
+
+            $lockedSession->status = 'terbuka';
+            $lockedSession->opened_at = $currentTime;
+            $lockedSession->opened_by = $user->getKey();
+            $lockedSession->save();
+
+            $this->setRawAttributes($lockedSession->getAttributes(), true);
+
+            return $this;
+        });
     }
 
     /**
@@ -209,32 +449,34 @@ class AttendanceSession extends Model
     {
         Gate::forUser($user)->authorize('close', $this);
 
-        if ($this->isCancelled()) {
-            throw new DomainException('Sesi absensi yang telah dibatalkan tidak dapat ditutup.');
-        }
-
-        if ($this->isClosed()) {
-            throw new DomainException('Sesi absensi sudah ditutup.');
-        }
-
-        if (! $this->isOpen()) {
-            throw new DomainException("Hanya sesi berstatus 'terbuka' yang dapat ditutup (status saat ini: {$this->status}).");
-        }
-
         $currentTime = $now ? Carbon::parse($now)->shiftTimezone('Asia/Jakarta') : Carbon::now('Asia/Jakarta');
 
         return DB::transaction(function () use ($user, $currentTime): self {
-            $this->status = 'ditutup';
-            $this->closed_at = $currentTime;
-            $this->closed_by = $user->getKey();
-            $this->save();
+            $lockedSession = self::query()->whereKey($this->getKey())->lockForUpdate()->firstOrFail();
 
-            $unrecordedStudents = $this->getUnrecordedActiveStudents();
+            if ($lockedSession->isCancelled()) {
+                throw new DomainException('Sesi absensi yang telah dibatalkan tidak dapat ditutup.');
+            }
+
+            if ($lockedSession->isClosed()) {
+                throw new DomainException('Sesi absensi sudah ditutup.');
+            }
+
+            if (! $lockedSession->isOpen()) {
+                throw new DomainException("Hanya sesi berstatus 'terbuka' yang dapat ditutup (status saat ini: {$lockedSession->status}).");
+            }
+
+            $lockedSession->status = 'ditutup';
+            $lockedSession->closed_at = $currentTime;
+            $lockedSession->closed_by = $user->getKey();
+            $lockedSession->save();
+
+            $unrecordedStudents = $lockedSession->getUnrecordedActiveStudents();
 
             foreach ($unrecordedStudents as $student) {
                 $record = AttendanceRecord::query()->firstOrCreate(
                     [
-                        'attendance_session_id' => $this->getKey(),
+                        'attendance_session_id' => $lockedSession->getKey(),
                         'student_id' => $student->getKey(),
                     ],
                     [
@@ -250,6 +492,8 @@ class AttendanceSession extends Model
                     $record->save();
                 }
             }
+
+            $this->setRawAttributes($lockedSession->getAttributes(), true);
 
             return $this;
         });
@@ -269,30 +513,36 @@ class AttendanceSession extends Model
             throw new InvalidArgumentException('Alasan pembatalan sesi tidak boleh kosong.');
         }
 
-        if ($this->isCancelled()) {
-            throw new DomainException('Sesi absensi sudah pernah dibatalkan.');
-        }
-
-        if ($this->isClosed()) {
-            throw new DomainException('Sesi absensi yang sudah ditutup tidak dapat dibatalkan melalui alur biasa.');
-        }
-
-        if ($this->opened_at !== null) {
-            throw new DomainException('Sesi absensi yang sudah dilaksanakan atau dibuka tidak dapat dibatalkan.');
-        }
-
-        if ($this->attendanceRecords()->exists()) {
-            throw new DomainException('Sesi absensi yang telah memiliki catatan presensi tidak dapat dibatalkan.');
-        }
-
         $currentTime = $now ? Carbon::parse($now)->shiftTimezone('Asia/Jakarta') : Carbon::now('Asia/Jakarta');
 
-        $this->cancelled_at = $currentTime;
-        $this->cancelled_by = $user->getKey();
-        $this->cancellation_reason = $trimmedReason;
-        $this->save();
+        return DB::transaction(function () use ($user, $trimmedReason, $currentTime): self {
+            $lockedSession = self::query()->whereKey($this->getKey())->lockForUpdate()->firstOrFail();
 
-        return $this;
+            if ($lockedSession->isCancelled()) {
+                throw new DomainException('Sesi absensi sudah pernah dibatalkan.');
+            }
+
+            if ($lockedSession->isClosed()) {
+                throw new DomainException('Sesi absensi yang sudah ditutup tidak dapat dibatalkan melalui alur biasa.');
+            }
+
+            if ($lockedSession->opened_at !== null) {
+                throw new DomainException('Sesi absensi yang sudah dilaksanakan atau dibuka tidak dapat dibatalkan.');
+            }
+
+            if ($lockedSession->attendanceRecords()->exists()) {
+                throw new DomainException('Sesi absensi yang telah memiliki catatan presensi tidak dapat dibatalkan.');
+            }
+
+            $lockedSession->cancelled_at = $currentTime;
+            $lockedSession->cancelled_by = $user->getKey();
+            $lockedSession->cancellation_reason = $trimmedReason;
+            $lockedSession->save();
+
+            $this->setRawAttributes($lockedSession->getAttributes(), true);
+
+            return $this;
+        });
     }
 
     /**
@@ -400,23 +650,31 @@ class AttendanceSession extends Model
         $currentTime = $now ? Carbon::parse($now)->shiftTimezone('Asia/Jakarta') : Carbon::now('Asia/Jakarta');
 
         $expiredSessions = self::query()
-            ->where('status', 'terbuka')
-            ->whereNull('cancelled_at')
-            ->where('attendance_closes_at', '<=', $currentTime)
+            ->expired($currentTime)
             ->get();
 
-        foreach ($expiredSessions as $session) {
-            DB::transaction(function () use ($session, $systemUser, $currentTime): void {
-                $session->status = 'ditutup';
-                $session->closed_at = $currentTime;
-                $session->closed_by = $systemUser?->getKey();
-                $session->save();
+        $closedSessions = new EloquentCollection;
 
-                $unrecordedStudents = $session->getUnrecordedActiveStudents();
+        foreach ($expiredSessions as $session) {
+            $wasClosed = DB::transaction(function () use ($session, $systemUser, $currentTime): bool {
+                $lockedSession = self::query()->whereKey($session->getKey())->lockForUpdate()->first();
+
+                if (! $lockedSession || $lockedSession->isCancelled() || $lockedSession->isClosed()) {
+                    return false;
+                }
+
+                $wasScheduled = $lockedSession->isScheduled();
+
+                $lockedSession->status = 'ditutup';
+                $lockedSession->closed_at = $currentTime;
+                $lockedSession->closed_by = $systemUser?->getKey();
+                $lockedSession->save();
+
+                $unrecordedStudents = $lockedSession->getUnrecordedActiveStudents();
                 foreach ($unrecordedStudents as $student) {
                     AttendanceRecord::query()->firstOrCreate(
                         [
-                            'attendance_session_id' => $session->getKey(),
+                            'attendance_session_id' => $lockedSession->getKey(),
                             'student_id' => $student->getKey(),
                         ],
                         [
@@ -424,14 +682,22 @@ class AttendanceSession extends Model
                             'status' => 'tidak_hadir',
                             'recorded_by' => $systemUser?->getKey(),
                             'checked_in_at' => null,
-                            'notes' => 'Otomatis dibuat saat sesi kedaluwarsa ditutup sistem.',
+                            'notes' => $wasScheduled
+                                ? 'Otomatis dibuat saat sesi tidak dibuka hingga melewati batas 24 jam.'
+                                : 'Otomatis dibuat saat sesi kedaluwarsa ditutup sistem.',
                         ]
                     );
                 }
+
+                return true;
             });
+
+            if ($wasClosed) {
+                $closedSessions->push($session->fresh());
+            }
         }
 
-        return $expiredSessions;
+        return $closedSessions;
     }
 
     /**
@@ -517,10 +783,21 @@ class AttendanceSession extends Model
      */
     public function scopeExpired(Builder $query, ?DateTimeInterface $at = null): Builder
     {
-        $currentTime = $at ? Carbon::instance($at)->setTimezone('Asia/Jakarta') : Carbon::now('Asia/Jakarta');
+        $currentTime = $at ? Carbon::parse($at)->shiftTimezone('Asia/Jakarta') : Carbon::now('Asia/Jakarta');
+        $maxStartCutoff = $currentTime->copy()->subHours(self::MAX_DURATION_HOURS);
 
-        return $query->where('status', 'terbuka')
-            ->whereNull('cancelled_at')
-            ->where('attendance_closes_at', '<=', $currentTime);
+        return $query->whereNull('cancelled_at')
+            ->where(function (Builder $q) use ($currentTime, $maxStartCutoff): void {
+                $q->where(function (Builder $openQuery) use ($currentTime, $maxStartCutoff): void {
+                    $openQuery->where('status', 'terbuka')
+                        ->where(function (Builder $timeQuery) use ($currentTime, $maxStartCutoff): void {
+                            $timeQuery->where('attendance_closes_at', '<=', $currentTime)
+                                ->orWhere('starts_at', '<=', $maxStartCutoff);
+                        });
+                })->orWhere(function (Builder $scheduledQuery) use ($maxStartCutoff): void {
+                    $scheduledQuery->where('status', 'terjadwal')
+                        ->where('starts_at', '<=', $maxStartCutoff);
+                });
+            });
     }
 }

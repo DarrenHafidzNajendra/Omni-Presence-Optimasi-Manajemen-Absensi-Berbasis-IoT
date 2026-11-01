@@ -26,14 +26,28 @@
             </div>
         @endif
 
+        @php
+            $currentTime = \Carbon\Carbon::now('Asia/Jakarta');
+            $displayStatus = $session->displayStatus($currentTime);
+        @endphp
+
         <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                     <dt class="text-sm font-medium text-slate-500">Status</dt>
-                    <dd class="text-base font-semibold capitalize text-slate-900">
-                        {{ $session->status }}
-                        @if ($session->isUnexecutedOverdue())
-                            <span class="ml-2 inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-800">
+                    <dd class="mt-1 flex flex-wrap items-center gap-2 text-base font-semibold capitalize text-slate-900">
+                        <span @class([
+                            'inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize',
+                            'bg-emerald-100 text-emerald-800' => $displayStatus === 'terbuka',
+                            'bg-slate-100 text-slate-700' => $displayStatus === 'ditutup',
+                            'bg-red-100 text-red-800' => $displayStatus === 'dibatalkan',
+                            'bg-amber-100 text-amber-800' => $displayStatus === 'kedaluwarsa',
+                            'bg-blue-100 text-blue-800' => $displayStatus === 'terjadwal',
+                        ])>
+                            {{ $displayStatus }}
+                        </span>
+                        @if ($session->isUnexecutedOverdue($currentTime))
+                            <span class="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-800">
                                 Belum Terlaksana / Perlu Ditindaklanjuti
                             </span>
                         @endif
@@ -50,6 +64,12 @@
                 <div>
                     <dt class="text-sm font-medium text-slate-500">Waktu Absensi</dt>
                     <dd class="text-sm text-slate-900">{{ $session->attendance_opens_at?->format('d/m/Y H:i') }} s/d {{ $session->attendance_closes_at?->format('H:i') }}</dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-slate-500">Metode Absensi</dt>
+                    <dd class="text-sm text-slate-900">
+                        {{ collect($session->allowed_methods ?? ['manual'])->map(fn ($m) => ['manual' => 'Manual', 'qr_code' => 'QR Code', 'face_recognition' => 'Face Recognition'][$m] ?? $m)->implode(', ') }}
+                    </dd>
                 </div>
                 @if ($session->opened_at)
                     <div>
@@ -82,18 +102,20 @@
             </dl>
 
             <div class="mt-6 flex flex-wrap gap-3 border-t border-slate-100 pt-6">
-                @if ($session->status === 'terjadwal')
+                @if ($session->canBeOpenedAt($currentTime))
                     <form method="POST" action="{{ route('course-sections.attendance-sessions.open', [$courseSection, $session]) }}">
                         @csrf
                         <button type="submit" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Buka Sesi</button>
                     </form>
+                @endif
 
+                @if ($session->isScheduled() && ! $session->isCancelled() && ! $session->isExpiredAt($currentTime))
                     <form method="POST" action="{{ route('course-sections.attendance-sessions.cancel', [$courseSection, $session]) }}" onsubmit="return confirm('Batalkan sesi ini?')">
                         @csrf
                         <input type="hidden" name="cancellation_reason" value="Dibatalkan melalui antarmuka kelas">
                         <button type="submit" class="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">Batalkan Sesi</button>
                     </form>
-                @elseif ($session->status === 'terbuka')
+                @elseif ($session->isOpen() && ! $session->isCancelled())
                     <form method="POST" action="{{ route('course-sections.attendance-sessions.close', [$courseSection, $session]) }}">
                         @csrf
                         <button type="submit" class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Tutup Sesi</button>

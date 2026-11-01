@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Course;
+use App\Models\CourseSection;
+use App\Models\Enrollment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -360,5 +362,236 @@ class CourseManagementTest extends TestCase
             ->assertViewHas('courses', fn ($courses): bool => $courses->perPage() === 10
                 && $courses->total() === 12
                 && $courses->count() === 10);
+    }
+
+    public function test_course_show_displays_students_grouped_by_class_sections_with_collapsible_groups_and_filters(): void
+    {
+        $course = Course::query()->create([
+            'code' => 'IF350',
+            'name' => 'Pemrograman Sistem Cerdas',
+        ]);
+
+        $sectionA = CourseSection::query()->create([
+            'course_id' => $course->id,
+            'name' => 'Kelas A',
+            'academic_year' => '2026/2027',
+            'semester' => 'ganjil',
+        ]);
+        $sectionB = CourseSection::query()->create([
+            'course_id' => $course->id,
+            'name' => 'Kelas B',
+            'academic_year' => '2026/2027',
+            'semester' => 'ganjil',
+        ]);
+        $sectionC = CourseSection::query()->create([
+            'course_id' => $course->id,
+            'name' => 'Kelas C',
+            'academic_year' => '2026/2027',
+            'semester' => 'ganjil',
+        ]);
+
+        $studentA = User::factory()->create([
+            'name' => 'Mahasiswa Kelas A',
+            'nim' => '2026350001',
+            'role' => 'mahasiswa',
+            'is_active' => true,
+        ]);
+        $studentB = User::factory()->create([
+            'name' => 'Mahasiswa Kelas B Nonaktif',
+            'nim' => '2026350002',
+            'role' => 'mahasiswa',
+            'is_active' => false,
+        ]);
+        $studentC = User::factory()->create([
+            'name' => 'Mahasiswa Kelas C',
+            'nim' => '2026350003',
+            'role' => 'mahasiswa',
+            'is_active' => true,
+        ]);
+
+        Enrollment::query()->create([
+            'course_section_id' => $sectionA->id,
+            'student_id' => $studentA->id,
+            'status' => 'aktif',
+        ]);
+        Enrollment::query()->create([
+            'course_section_id' => $sectionB->id,
+            'student_id' => $studentB->id,
+            'status' => 'aktif',
+        ]);
+        Enrollment::query()->create([
+            'course_section_id' => $sectionC->id,
+            'student_id' => $studentC->id,
+            'status' => 'aktif',
+        ]);
+
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        // 1. Secara default, semua kelompok kelas tertutup (should_open = false) dan menampilkan ringkasan beserta jumlah mahasiswa
+        $defaultResponse = $this->actingAs($admin)->get(route('courses.show', $course));
+
+        $defaultResponse
+            ->assertOk()
+            ->assertSee('data-class-summary="Kelas A"', false)
+            ->assertSee('data-class-summary="Kelas B"', false)
+            ->assertSee('data-class-summary="Kelas C"', false)
+            ->assertSee('data-class-group="Kelas A"', false)
+            ->assertSee('data-class-group="Kelas B"', false)
+            ->assertSee('data-class-group="Kelas C"', false)
+            ->assertSeeText('Total terdaftar:')
+            ->assertSeeText('3 Mahasiswa')
+            ->assertViewHas('filteredSections', function ($sections): bool {
+                return $sections->count() === 3
+                    && $sections->every(fn ($section): bool => $section->should_open === false && (int) $section->total_enrollments_count === 1);
+            });
+
+        // 2. Ketika kelompok kelas dipilih melalui tab ringkasan (open_section_id), kelompok kelas tersebut terbuka
+        $this->actingAs($admin)->get(route('courses.show', [
+            'course' => $course,
+            'open_section_id' => $sectionA->id,
+        ]))
+            ->assertOk()
+            ->assertViewHas('filteredSections', function ($sections) use ($sectionA): bool {
+                $target = $sections->firstWhere('id', $sectionA->id);
+                $others = $sections->where('id', '!=', $sectionA->id);
+
+                return $target !== null
+                    && $target->should_open === true
+                    && $others->every(fn ($s): bool => $s->should_open === false);
+            })
+            ->assertSeeText('2026350001')
+            ->assertSeeText('Mahasiswa Kelas A');
+
+        // 3. Filter berdasarkan Kelas B saja (course_section_id)
+        $this->actingAs($admin)->get(route('courses.show', [
+            'course' => $course,
+            'course_section_id' => $sectionB->id,
+        ]))
+            ->assertOk()
+            ->assertSee('data-class-group="Kelas B"', false)
+            ->assertDontSee('data-class-group="Kelas A"', false)
+            ->assertDontSee('data-class-group="Kelas C"', false)
+            ->assertSeeText('Mahasiswa Kelas B Nonaktif')
+            ->assertDontSeeText('Mahasiswa Kelas A')
+            ->assertViewHas('filteredSections', fn ($sections): bool => $sections->count() === 1 && $sections->first()->should_open === true);
+
+        // 4. Filter berdasarkan status akun nonaktif dan pencarian NIM
+        $this->actingAs($admin)->get(route('courses.show', [
+            'course' => $course,
+            'account_status' => 'inactive',
+            'student_search' => '2026350002',
+        ]))
+            ->assertOk()
+            ->assertSeeText('Mahasiswa Kelas B Nonaktif')
+            ->assertDontSeeText('Mahasiswa Kelas A')
+            ->assertDontSeeText('Mahasiswa Kelas C')
+            ->assertViewHas('filteredSections', function ($sections) use ($sectionB): bool {
+                $target = $sections->firstWhere('id', $sectionB->id);
+
+                return $target !== null
+                    && $target->should_open === true
+                    && (int) $target->total_enrollments_count === 1
+                    && (int) $target->filtered_enrollments_count === 1;
+            });
+    }
+
+    public function test_course_show_paginates_students_per_class_section_and_prevents_duplicate_entries(): void
+    {
+        $course = Course::query()->create([
+            'code' => 'IF351',
+            'name' => 'Kecerdasan Buatan Lanjut',
+        ]);
+
+        $sectionA = CourseSection::query()->create([
+            'course_id' => $course->id,
+            'name' => 'Kelas A',
+            'academic_year' => '2026/2027',
+            'semester' => 'ganjil',
+        ]);
+        $sectionB = CourseSection::query()->create([
+            'course_id' => $course->id,
+            'name' => 'Kelas B',
+            'academic_year' => '2026/2027',
+            'semester' => 'ganjil',
+        ]);
+
+        foreach (range(1, 12) as $index) {
+            $student = User::factory()->create([
+                'name' => sprintf('Peserta Kelas A %02d', $index),
+                'nim' => sprintf('2026351%03d', $index),
+                'role' => 'mahasiswa',
+                'is_active' => true,
+            ]);
+
+            Enrollment::query()->create([
+                'course_section_id' => $sectionA->id,
+                'student_id' => $student->id,
+                'status' => 'aktif',
+            ]);
+        }
+
+        $studentB = User::factory()->create([
+            'name' => 'Peserta Tunggal Kelas B',
+            'nim' => '2026351999',
+            'role' => 'mahasiswa',
+            'is_active' => true,
+        ]);
+
+        Enrollment::query()->create([
+            'course_section_id' => $sectionB->id,
+            'student_id' => $studentB->id,
+            'status' => 'aktif',
+        ]);
+
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        // Halaman 1 Kelas A menampilkan 10 dari 12 mahasiswa, sedangkan Kelas B menampilkan 1 mahasiswa
+        $pageOneResponse = $this->actingAs($admin)->get(route('courses.show', $course));
+
+        $pageOneResponse
+            ->assertOk()
+            ->assertSee('data-class-pagination="Kelas A"', false)
+            ->assertDontSee('data-class-pagination="Kelas B"', false)
+            ->assertSeeText('Peserta Kelas A 01')
+            ->assertSeeText('Peserta Kelas A 10')
+            ->assertDontSeeText('Peserta Kelas A 11')
+            ->assertDontSeeText('Peserta Kelas A 12')
+            ->assertSeeText('Peserta Tunggal Kelas B')
+            ->assertViewHas('filteredSections', function ($sections) use ($sectionA, $sectionB): bool {
+                $classA = $sections->firstWhere('id', $sectionA->id);
+                $classB = $sections->firstWhere('id', $sectionB->id);
+
+                return $classA !== null
+                    && $classB !== null
+                    && (int) $classA->total_enrollments_count === 12
+                    && $classA->paginatedEnrollments->count() === 10
+                    && $classA->paginatedEnrollments->total() === 12
+                    && $classA->paginatedEnrollments->pluck('student_id')->unique()->count() === 10
+                    && (int) $classB->total_enrollments_count === 1
+                    && $classB->paginatedEnrollments->count() === 1;
+            });
+
+        // Navigasi ke halaman 2 untuk Kelas A otomatis membuka kelompok Kelas A dan menampilkan sisa 2 mahasiswa
+        $pageTwoResponse = $this->actingAs($admin)->get(route('courses.show', [
+            'course' => $course,
+            'section_'.$sectionA->id.'_page' => 2,
+        ]));
+
+        $pageTwoResponse
+            ->assertOk()
+            ->assertSeeText('Peserta Kelas A 11')
+            ->assertSeeText('Peserta Kelas A 12')
+            ->assertDontSeeText('Peserta Kelas A 01')
+            ->assertSeeText('Peserta Tunggal Kelas B')
+            ->assertViewHas('filteredSections', function ($sections) use ($sectionA, $sectionB): bool {
+                $classA = $sections->firstWhere('id', $sectionA->id);
+                $classB = $sections->firstWhere('id', $sectionB->id);
+
+                return $classA !== null
+                    && $classB !== null
+                    && $classA->should_open === true
+                    && $classB->should_open === false
+                    && $classA->paginatedEnrollments->count() === 2;
+            });
     }
 }

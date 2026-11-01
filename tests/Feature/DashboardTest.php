@@ -6,9 +6,12 @@ use App\Enums\UserRole;
 use App\Models\AcademicPeriod;
 use App\Models\AttendanceRecord;
 use App\Models\AttendanceSession;
+use App\Models\ClassSchedule;
 use App\Models\Course;
 use App\Models\CourseSection;
+use App\Models\CourseSectionLecturer;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -135,5 +138,47 @@ class DashboardTest extends TestCase
             ->assertSee('data-statistic="attendance-total">1', false)
             ->assertSee('data-statistic="attendance-hadir">1', false)
             ->assertDontSeeText('Data belum tersedia');
+    }
+
+    public function test_lecturer_dashboard_shows_buka_presensi_button_when_schedule_start_time_is_reached(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-02 08:15:00', 'Asia/Jakarta'));
+
+        $dosen = User::factory()->create(['role' => UserRole::Dosen->value]);
+        $course = Course::query()->create([
+            'code' => 'IF101',
+            'name' => 'IoT Sistem Absensi',
+        ]);
+        $section = CourseSection::query()->create([
+            'course_id' => $course->id,
+            'name' => 'Kelas IoT A',
+            'academic_year' => '2026/2027',
+            'semester' => 'ganjil',
+            'is_active' => true,
+        ]);
+        CourseSectionLecturer::query()->create([
+            'course_section_id' => $section->id,
+            'user_id' => $dosen->id,
+            'teaching_type' => 'teori',
+        ]);
+        ClassSchedule::query()->create([
+            'course_section_id' => $section->id,
+            'session_type' => 'teori',
+            'delivery_mode' => 'onsite',
+            'day_of_week' => 1, // Senin
+            'starts_at' => '08:00',
+            'ends_at' => '10:00',
+            'timezone' => 'Asia/Jakarta',
+            'location' => 'Lab IoT',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($dosen)->get(route('dashboard'));
+
+        $response->assertOk()
+            ->assertSeeText('Kelas IoT A')
+            ->assertSeeText('Buka Presensi');
+
+        Carbon::setTestNow();
     }
 }

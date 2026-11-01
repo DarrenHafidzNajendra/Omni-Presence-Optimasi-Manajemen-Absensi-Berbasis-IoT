@@ -2,6 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\AttendanceRecord;
+use App\Models\AttendanceSession;
+use App\Models\Course;
+use App\Models\CourseSection;
+use App\Models\Enrollment;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Sequence;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -244,5 +249,129 @@ class UsersIndexTest extends TestCase
         $response = $this->actingAs($user)->get(route('dashboard'));
 
         $response->assertOk()->assertDontSeeText('Pengguna');
+    }
+
+    public function test_admin_can_filter_students_by_course_section_and_account_status(): void
+    {
+        $course = Course::query()->create(['code' => 'IF201', 'name' => 'Pemrograman Web']);
+        $sectionA = CourseSection::query()->create([
+            'course_id' => $course->id,
+            'name' => 'Kelas A',
+            'academic_year' => '2026/2027',
+            'semester' => 'ganjil',
+        ]);
+        $sectionB = CourseSection::query()->create([
+            'course_id' => $course->id,
+            'name' => 'Kelas B',
+            'academic_year' => '2026/2027',
+            'semester' => 'ganjil',
+        ]);
+
+        $studentA = User::factory()->create([
+            'name' => 'Andi Kelas A Aktif',
+            'nim' => '2026111001',
+            'role' => 'mahasiswa',
+            'is_active' => true,
+        ]);
+        $studentB = User::factory()->create([
+            'name' => 'Bela Kelas B Nonaktif',
+            'nim' => '2026111002',
+            'role' => 'mahasiswa',
+            'is_active' => false,
+        ]);
+
+        Enrollment::query()->create([
+            'course_section_id' => $sectionA->id,
+            'student_id' => $studentA->id,
+            'status' => 'aktif',
+        ]);
+        Enrollment::query()->create([
+            'course_section_id' => $sectionB->id,
+            'student_id' => $studentB->id,
+            'status' => 'aktif',
+        ]);
+
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        // Filter berdasarkan Kelas A
+        $this->actingAs($admin)->get(route('users.index', [
+            'role' => 'mahasiswa',
+            'course_section_id' => $sectionA->id,
+        ]))
+            ->assertOk()
+            ->assertSeeText('Andi Kelas A Aktif')
+            ->assertSeeText('Kelas A (IF201)')
+            ->assertDontSeeText('Bela Kelas B Nonaktif');
+
+        // Filter berdasarkan Status Akun Nonaktif
+        $this->actingAs($admin)->get(route('users.index', [
+            'role' => 'mahasiswa',
+            'status' => 'inactive',
+        ]))
+            ->assertOk()
+            ->assertSeeText('Bela Kelas B Nonaktif')
+            ->assertDontSeeText('Andi Kelas A Aktif');
+    }
+
+    public function test_admin_can_delete_student_without_attendance_history_but_cannot_delete_student_with_attendance_records(): void
+    {
+        $course = Course::query()->create(['code' => 'IF202', 'name' => 'IoT Lanjut']);
+        $section = CourseSection::query()->create([
+            'course_id' => $course->id,
+            'name' => 'Kelas A',
+            'academic_year' => '2026/2027',
+            'semester' => 'ganjil',
+        ]);
+
+        $deletableStudent = User::factory()->create([
+            'name' => 'Mahasiswa Tanpa Absensi',
+            'nim' => '2026222001',
+            'role' => 'mahasiswa',
+        ]);
+
+        $protectedStudent = User::factory()->create([
+            'name' => 'Mahasiswa Punya Absensi',
+            'nim' => '2026222002',
+            'role' => 'mahasiswa',
+        ]);
+
+        $session = AttendanceSession::query()->create([
+            'course_section_id' => $section->id,
+            'session_type' => 'teori',
+            'delivery_mode' => 'onsite',
+            'title' => 'Pertemuan 1',
+            'starts_at' => '2026-10-01 08:00:00',
+            'ends_at' => '2026-10-01 10:00:00',
+            'attendance_opens_at' => '2026-10-01 08:00:00',
+            'attendance_closes_at' => '2026-10-01 10:00:00',
+            'allowed_methods' => ['manual'],
+            'status' => 'ditutup',
+        ]);
+
+        AttendanceRecord::query()->create([
+            'attendance_session_id' => $session->id,
+            'student_id' => $protectedStudent->id,
+            'method' => 'manual',
+            'status' => 'hadir',
+        ]);
+
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        // 1. Mahasiswa tanpa catatan absensi aman dihapus
+        $this->actingAs($admin)
+            ->delete(route('users.destroy', $deletableStudent))
+            ->assertRedirectToRoute('users.index')
+            ->assertSessionHas('success', 'Data mahasiswa berhasil dihapus.');
+
+        $this->assertDatabaseMissing('users', ['id' => $deletableStudent->id]);
+
+        // 2. Mahasiswa dengan catatan absensi ditolak penghapusannya agar tidak merusak histori
+        $this->actingAs($admin)
+            ->from(route('users.index'))
+            ->delete(route('users.destroy', $protectedStudent))
+            ->assertRedirectToRoute('users.index')
+            ->assertSessionHasErrors('delete');
+
+        $this->assertDatabaseHas('users', ['id' => $protectedStudent->id]);
     }
 }

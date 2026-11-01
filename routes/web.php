@@ -85,6 +85,11 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::get('/users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
     Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
     Route::patch('/users/{user}/status', [UserController::class, 'updateStatus'])->name('users.status');
+    Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+});
+
+Route::middleware(['auth', 'role:mahasiswa'])->group(function (): void {
+    Route::post('/student/course-sections/{courseSection}/enroll', [EnrollmentController::class, 'enrollSelf'])->name('student.course-sections.enroll');
 });
 
 Route::middleware(['auth', 'role:admin,dosen'])->group(function (): void {
@@ -93,6 +98,7 @@ Route::middleware(['auth', 'role:admin,dosen'])->group(function (): void {
         Route::get('/course-sections/{courseSection}/attendance-sessions', [AttendanceSessionController::class, 'index'])->name('course-sections.attendance-sessions.index');
         Route::get('/course-sections/{courseSection}/attendance-sessions/create', [AttendanceSessionController::class, 'create'])->name('course-sections.attendance-sessions.create');
         Route::post('/course-sections/{courseSection}/attendance-sessions', [AttendanceSessionController::class, 'store'])->name('course-sections.attendance-sessions.store');
+        Route::post('/course-sections/{courseSection}/schedules/{schedule}/open-session', [AttendanceSessionController::class, 'openFromSchedule'])->name('course-sections.schedules.open-session');
         Route::get('/course-sections/{courseSection}/attendance-sessions/{attendanceSession}', [AttendanceSessionController::class, 'show'])->name('course-sections.attendance-sessions.show');
         Route::get('/course-sections/{courseSection}/attendance-sessions/{attendanceSession}/replacement/create', [AttendanceSessionController::class, 'createReplacement'])->name('course-sections.attendance-sessions.replacement.create');
         Route::post('/course-sections/{courseSection}/attendance-sessions/{attendanceSession}/open', [AttendanceSessionController::class, 'open'])->name('course-sections.attendance-sessions.open');

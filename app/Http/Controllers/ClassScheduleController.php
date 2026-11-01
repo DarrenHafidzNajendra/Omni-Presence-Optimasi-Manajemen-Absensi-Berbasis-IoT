@@ -28,7 +28,11 @@ class ClassScheduleController extends Controller
     public function index(CourseSection $courseSection): View
     {
         return view('class-schedules.index', [
-            'courseSection' => $courseSection->load('course:id,code,name'),
+            'courseSection' => $courseSection->load([
+                'course:id,code,name',
+                'academicPeriod:id,name,is_active',
+                'lecturers.user:id,name,nidn',
+            ]),
             'schedules' => $courseSection->schedules()
                 ->orderBy('day_of_week')
                 ->orderBy('starts_at')

@@ -20,6 +20,8 @@ class DashboardController extends Controller
         $recentActivities = collect();
         $activeSessions = collect();
         $myCourseSections = collect();
+        $studentEnrollments = collect();
+        $availableCourseSections = collect();
 
         // 1. User & Academic Statistics (Admin only)
         $academicStatistics = null;
@@ -133,6 +135,32 @@ class DashboardController extends Controller
                 ->get();
         }
 
+        // 6. Student Self-Enrollment & Enrolled Sections (Mahasiswa only)
+        if ($user?->role === UserRole::Mahasiswa->value) {
+            $studentEnrollments = $user->enrollments()
+                ->with(['courseSection.course', 'courseSection.schedules', 'courseSection.academicPeriod'])
+                ->orderByDesc('id')
+                ->get();
+
+            $enrolledSectionIds = $studentEnrollments->pluck('course_section_id')->all();
+
+            $availableCourseSections = CourseSection::query()
+                ->where('is_active', true)
+                ->whereHas('course', function ($q): void {
+                    $q->where('is_active', true);
+                })
+                ->where(function ($q): void {
+                    $q->whereNull('academic_period_id')
+                        ->orWhereHas('academicPeriod', function ($periodQuery): void {
+                            $periodQuery->where('is_active', true);
+                        });
+                })
+                ->whereNotIn('id', $enrolledSectionIds)
+                ->with(['course:id,code,name', 'schedules', 'academicPeriod:id,name,is_active'])
+                ->orderBy('name')
+                ->get();
+        }
+
         return view('dashboard', [
             'userStatistics' => $userStatistics,
             'academicStatistics' => $academicStatistics,
@@ -140,6 +168,8 @@ class DashboardController extends Controller
             'recentActivities' => $recentActivities,
             'activeSessions' => $activeSessions,
             'myCourseSections' => $myCourseSections,
+            'studentEnrollments' => $studentEnrollments,
+            'availableCourseSections' => $availableCourseSections,
         ]);
     }
 }

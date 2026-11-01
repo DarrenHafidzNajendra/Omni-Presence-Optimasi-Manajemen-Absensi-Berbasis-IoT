@@ -6,6 +6,7 @@ use App\Enums\UserRole;
 use App\Models\AcademicPeriod;
 use App\Models\AttendanceRecord;
 use App\Models\AttendanceSession;
+use App\Models\ClassSchedule;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\CourseSectionLecturer;
@@ -601,6 +602,130 @@ class AttendanceSessionLifecycleTest extends TestCase
 
         $scheduledSession->refresh();
         $this->assertSame('terjadwal', $scheduledSession->status);
+    }
+
+    public function test_manually_closed_session_cannot_be_reopened_directly_or_via_schedule(): void
+    {
+        $section = $this->createCourseSection();
+        $lecturer = User::factory()->create(['role' => UserRole::Dosen->value]);
+        $this->assignLecturer($section, $lecturer);
+
+        $schedule = ClassSchedule::query()->create([
+            'course_section_id' => $section->id,
+            'session_type' => 'teori',
+            'delivery_mode' => 'onsite',
+            'day_of_week' => 1, // Senin
+            'starts_at' => '08:00',
+            'ends_at' => '10:00',
+            'timezone' => 'Asia/Jakarta',
+            'location' => 'Lab 1',
+            'is_active' => true,
+        ]);
+
+        // 2026-11-02 adalah hari Senin
+        $openTime = Carbon::parse('2026-11-02 08:05:00', 'Asia/Jakarta');
+        $session = AttendanceSession::openFromSchedule($schedule, $lecturer, [], $openTime);
+
+        $closeTime = Carbon::parse('2026-11-02 09:45:00', 'Asia/Jakarta');
+        $session->close($lecturer, $closeTime);
+
+        $this->assertSame('ditutup', $session->fresh()->status);
+        $this->assertSame($lecturer->id, $session->fresh()->closed_by);
+
+        // 1. Mencoba buka kembali langsung via open()
+        try {
+            $session->open($lecturer, Carbon::parse('2026-11-02 09:50:00', 'Asia/Jakarta'));
+            $this->fail('Manually closed session should not be reopenable via open().');
+        } catch (DomainException $e) {
+            $this->assertStringContainsString('sudah ditutup', $e->getMessage());
+        }
+
+        // 2. Mencoba buka kembali via openFromSchedule() pada jadwal dan tanggal yang sama
+        try {
+            AttendanceSession::openFromSchedule($schedule, $lecturer, [], Carbon::parse('2026-11-02 09:55:00', 'Asia/Jakarta'));
+            $this->fail('Manually closed session should not be reopenable via openFromSchedule().');
+        } catch (DomainException $e) {
+            $this->assertStringContainsString('sudah ditutup', $e->getMessage());
+        }
+
+        $this->assertSame('ditutup', $session->fresh()->status);
+        $this->assertDatabaseCount('attendance_sessions', 1);
+    }
+
+    public function test_updating_class_schedule_does_not_alter_historical_sessions_or_attendance_records(): void
+    {
+        $section = $this->createCourseSection();
+        $lecturer = User::factory()->create(['role' => UserRole::Dosen->value]);
+        $this->assignLecturer($section, $lecturer);
+
+        $studentQr = User::factory()->create(['role' => UserRole::Mahasiswa->value]);
+        $studentFace = User::factory()->create(['role' => UserRole::Mahasiswa->value]);
+        $this->enrollStudent($section, $studentQr);
+        $this->enrollStudent($section, $studentFace);
+
+        $schedule = ClassSchedule::query()->create([
+            'course_section_id' => $section->id,
+            'session_type' => 'teori',
+            'delivery_mode' => 'onsite',
+            'day_of_week' => 1, // Senin
+            'starts_at' => '08:00',
+            'ends_at' => '10:00',
+            'timezone' => 'Asia/Jakarta',
+            'location' => 'Ruang 201',
+            'is_active' => true,
+        ]);
+
+        $openTime = Carbon::parse('2026-11-02 08:10:00', 'Asia/Jakarta');
+        $session = AttendanceSession::openFromSchedule($schedule, $lecturer, [], $openTime);
+
+        AttendanceRecord::query()->create([
+            'attendance_session_id' => $session->id,
+            'student_id' => $studentQr->id,
+            'method' => 'qr_code',
+            'status' => 'hadir',
+            'checked_in_at' => '2026-11-02 08:12:00',
+        ]);
+        AttendanceRecord::query()->create([
+            'attendance_session_id' => $session->id,
+            'student_id' => $studentFace->id,
+            'method' => 'face_recognition',
+            'status' => 'terlambat',
+            'checked_in_at' => '2026-11-02 08:30:00',
+        ]);
+
+        $session->close($lecturer, Carbon::parse('2026-11-02 10:00:00', 'Asia/Jakarta'));
+
+        // Admin mengubah jadwal kuliah (hari, jam mulai, jam selesai, tipe sesi, dan mode)
+        $schedule->update([
+            'day_of_week' => 4, // Kamis
+            'starts_at' => '13:00',
+            'ends_at' => '15:30',
+            'session_type' => 'praktikum',
+            'delivery_mode' => 'online',
+            'location' => null,
+            'meeting_url' => 'https://meet.example.com/iot',
+        ]);
+
+        // Pastikan sesi historis dan riwayat absensi sama sekali tidak berubah
+        $session->refresh();
+        $this->assertSame('2026-11-02 08:00:00', $session->starts_at->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-11-02 10:00:00', $session->ends_at->format('Y-m-d H:i:s'));
+        $this->assertSame('teori', $session->session_type);
+        $this->assertSame('onsite', $session->delivery_mode);
+        $this->assertSame('ditutup', $session->status);
+
+        $this->assertDatabaseHas('attendance_records', [
+            'attendance_session_id' => $session->id,
+            'student_id' => $studentQr->id,
+            'method' => 'qr_code',
+            'status' => 'hadir',
+        ]);
+        $this->assertDatabaseHas('attendance_records', [
+            'attendance_session_id' => $session->id,
+            'student_id' => $studentFace->id,
+            'method' => 'face_recognition',
+            'status' => 'terlambat',
+        ]);
     }
 
     private function createCourseSection(string $name = 'Kelas A'): CourseSection

@@ -18,6 +18,13 @@ class AttendanceSessionHttpTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        parent::tearDown();
+    }
+
     public function test_guest_cannot_access_attendance_session_routes(): void
     {
         $section = $this->createCourseSection();
@@ -113,6 +120,8 @@ class AttendanceSessionHttpTest extends TestCase
 
     public function test_assigned_lecturer_can_store_regular_session(): void
     {
+        Carbon::setTestNow(Carbon::parse('2026-11-02 08:05:00', 'Asia/Jakarta'));
+
         $section = $this->createCourseSection();
         $lecturer = User::factory()->create(['role' => UserRole::Dosen->value]);
         $this->assignLecturer($section, $lecturer);
@@ -153,6 +162,132 @@ class AttendanceSessionHttpTest extends TestCase
             'session_kind' => 'regular',
             'status' => 'terjadwal',
         ]);
+    }
+
+    public function test_lecturer_cannot_open_or_create_regular_session_before_schedule_starts(): void
+    {
+        // Waktu sekarang pukul 07:30, sedangkan jadwal mulai pukul 08:00
+        Carbon::setTestNow(Carbon::parse('2026-11-02 07:30:00', 'Asia/Jakarta'));
+
+        $section = $this->createCourseSection();
+        $lecturer = User::factory()->create(['role' => UserRole::Dosen->value]);
+        $this->assignLecturer($section, $lecturer);
+
+        $schedule = ClassSchedule::query()->create([
+            'course_section_id' => $section->id,
+            'session_type' => 'teori',
+            'delivery_mode' => 'onsite',
+            'day_of_week' => 1, // Senin
+            'starts_at' => '08:00',
+            'ends_at' => '10:00',
+            'timezone' => 'Asia/Jakarta',
+            'location' => 'Lab 1',
+            'is_active' => true,
+        ]);
+
+        // 1. Melalui tombol Buka Presensi langsung dari jadwal
+        $openFromScheduleResponse = $this->actingAs($lecturer)
+            ->post(route('course-sections.schedules.open-session', [$section, $schedule]));
+        $openFromScheduleResponse->assertRedirect();
+        $openFromScheduleResponse->assertSessionHasErrors('session');
+
+        // 2. Melalui form store dengan class_schedule_id
+        $storeResponse = $this->actingAs($lecturer)->post(route('course-sections.attendance-sessions.store', $section), [
+            'class_schedule_id' => $schedule->id,
+            'session_type' => 'teori',
+            'delivery_mode' => 'onsite',
+            'title' => 'Pertemuan Sebelum Jadwal',
+            'starts_at' => '2026-11-02 08:00',
+            'ends_at' => '2026-11-02 10:00',
+            'attendance_opens_at' => '2026-11-02 08:00',
+            'attendance_closes_at' => '2026-11-02 10:00',
+            'allowed_methods' => ['qr_code'],
+        ]);
+        $storeResponse->assertRedirect();
+        $storeResponse->assertSessionHasErrors('starts_at');
+
+        $this->assertDatabaseCount('attendance_sessions', 0);
+    }
+
+    public function test_lecturer_can_open_session_from_schedule_when_start_time_is_reached_and_repeated_requests_do_not_duplicate(): void
+    {
+        // Waktu sekarang pukul 08:05 (Senin, 2026-11-02), jadwal mulai pukul 08:00
+        Carbon::setTestNow(Carbon::parse('2026-11-02 08:05:00', 'Asia/Jakarta'));
+
+        $section = $this->createCourseSection();
+        $lecturer = User::factory()->create(['role' => UserRole::Dosen->value]);
+        $this->assignLecturer($section, $lecturer);
+
+        $schedule = ClassSchedule::query()->create([
+            'course_section_id' => $section->id,
+            'session_type' => 'praktikum',
+            'delivery_mode' => 'onsite',
+            'day_of_week' => 1, // Senin
+            'starts_at' => '08:00',
+            'ends_at' => '10:30',
+            'timezone' => 'Asia/Jakarta',
+            'location' => 'Lab IoT 2',
+            'is_active' => true,
+        ]);
+
+        // Halaman index menampilkan tombol Buka Presensi
+        $this->actingAs($lecturer)
+            ->get(route('course-sections.attendance-sessions.index', $section))
+            ->assertOk()
+            ->assertSeeText('Buka Presensi');
+
+        // Permintaan pertama membuat dan membuka sesi
+        $firstResponse = $this->actingAs($lecturer)
+            ->post(route('course-sections.schedules.open-session', [$section, $schedule]));
+        $firstResponse->assertRedirect();
+        $firstResponse->assertSessionHas('success', 'Sesi presensi berhasil dibuka.');
+
+        $this->assertDatabaseCount('attendance_sessions', 1);
+
+        $session = AttendanceSession::query()->firstOrFail();
+        $this->assertSame($section->id, $session->course_section_id);
+        $this->assertSame($schedule->id, $session->class_schedule_id);
+        $this->assertSame('praktikum', $session->session_type);
+        $this->assertSame('onsite', $session->delivery_mode);
+        $this->assertSame('terbuka', $session->status);
+        $this->assertSame($lecturer->id, $session->opened_by);
+        $this->assertSame('2026-11-02 08:00:00', $session->starts_at->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-11-02 10:30:00', $session->ends_at->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-11-03 08:00:00', $session->attendance_closes_at->format('Y-m-d H:i:s'));
+
+        // Permintaan kedua (berulang) ditolak dan tidak membuat sesi ganda
+        $secondResponse = $this->actingAs($lecturer)
+            ->post(route('course-sections.schedules.open-session', [$section, $schedule]));
+        $secondResponse->assertRedirect();
+        $secondResponse->assertSessionHasErrors('session');
+
+        $this->assertDatabaseCount('attendance_sessions', 1);
+    }
+
+    public function test_unassigned_lecturer_cannot_open_session_from_another_lecturers_schedule(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-02 08:05:00', 'Asia/Jakarta'));
+
+        $section = $this->createCourseSection();
+        $unassignedLecturer = User::factory()->create(['role' => UserRole::Dosen->value]);
+
+        $schedule = ClassSchedule::query()->create([
+            'course_section_id' => $section->id,
+            'session_type' => 'teori',
+            'delivery_mode' => 'onsite',
+            'day_of_week' => 1,
+            'starts_at' => '08:00',
+            'ends_at' => '10:00',
+            'timezone' => 'Asia/Jakarta',
+            'location' => 'Lab 1',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($unassignedLecturer)
+            ->post(route('course-sections.schedules.open-session', [$section, $schedule]))
+            ->assertForbidden();
+
+        $this->assertDatabaseCount('attendance_sessions', 0);
     }
 
     public function test_regular_session_validation_fails_when_day_of_week_does_not_match_schedule(): void
@@ -383,6 +518,190 @@ class AttendanceSessionHttpTest extends TestCase
         $this->assertDatabaseMissing('attendance_sessions', [
             'title' => 'Pertemuan Pengganti Tanggal Salah',
         ]);
+    }
+
+    public function test_next_regular_meeting_is_automatically_available_on_subsequent_week_without_recreating_schedule(): void
+    {
+        $section = $this->createCourseSection();
+        $lecturer = User::factory()->create(['role' => UserRole::Dosen->value]);
+        $this->assignLecturer($section, $lecturer);
+
+        $schedule = ClassSchedule::query()->create([
+            'course_section_id' => $section->id,
+            'session_type' => 'teori',
+            'delivery_mode' => 'onsite',
+            'day_of_week' => 1, // Senin
+            'starts_at' => '08:00',
+            'ends_at' => '10:00',
+            'timezone' => 'Asia/Jakarta',
+            'location' => 'Lab IoT 1',
+            'is_active' => true,
+        ]);
+
+        // Minggu 1: Senin, 2026-11-02 pukul 08:10 -> Buka dan tutup sesi
+        Carbon::setTestNow(Carbon::parse('2026-11-02 08:10:00', 'Asia/Jakarta'));
+
+        $this->actingAs($lecturer)
+            ->post(route('course-sections.schedules.open-session', [$section, $schedule]))
+            ->assertRedirect();
+
+        $weekOneSession = AttendanceSession::query()->firstOrFail();
+        $this->assertSame('Pertemuan 1', $weekOneSession->title);
+        $this->assertSame('2026-11-02 08:00:00', $weekOneSession->starts_at->format('Y-m-d H:i:s'));
+
+        $this->actingAs($lecturer)
+            ->post(route('course-sections.attendance-sessions.close', [$section, $weekOneSession]))
+            ->assertRedirect();
+
+        // Minggu 2: Senin, 2026-11-09 pukul 07:30 (sebelum jam 08:00) -> tombol Buka Presensi belum muncul
+        Carbon::setTestNow(Carbon::parse('2026-11-09 07:30:00', 'Asia/Jakarta'));
+
+        $this->actingAs($lecturer)
+            ->get(route('course-sections.attendance-sessions.index', $section))
+            ->assertOk()
+            ->assertDontSeeText('Buka Presensi')
+            ->assertSeeText('Belum dimulai (Mulai pukul 08:00 WIB)');
+
+        // Minggu 2: Senin, 2026-11-09 pukul 08:05 (waktu mulai tercapai) -> tombol Buka Presensi muncul otomatis
+        Carbon::setTestNow(Carbon::parse('2026-11-09 08:05:00', 'Asia/Jakarta'));
+
+        $this->actingAs($lecturer)
+            ->get(route('course-sections.attendance-sessions.index', $section))
+            ->assertOk()
+            ->assertSeeText('Buka Presensi');
+
+        $this->actingAs($lecturer)
+            ->post(route('course-sections.schedules.open-session', [$section, $schedule]))
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Sesi presensi berhasil dibuka.');
+
+        $this->assertDatabaseCount('attendance_sessions', 2);
+
+        $weekTwoSession = AttendanceSession::query()->orderByDesc('id')->firstOrFail();
+        $this->assertSame('Pertemuan 2', $weekTwoSession->title);
+        $this->assertSame('terbuka', $weekTwoSession->status);
+        $this->assertSame('2026-11-09 08:00:00', $weekTwoSession->starts_at->format('Y-m-d H:i:s'));
+    }
+
+    public function test_session_detail_and_index_ui_hide_open_and_reopen_buttons_for_closed_cancelled_expired_and_future_sessions(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-02 09:00:00', 'Asia/Jakarta'));
+
+        $section = $this->createCourseSection();
+        $lecturer = User::factory()->create(['role' => UserRole::Dosen->value]);
+        $this->assignLecturer($section, $lecturer);
+
+        $closedSession = $this->createAttendanceSession($section, [
+            'title' => 'Pertemuan Ditutup',
+            'status' => 'ditutup',
+            'starts_at' => '2026-10-26 08:00:00',
+            'ends_at' => '2026-10-26 10:00:00',
+            'attendance_opens_at' => '2026-10-26 08:00:00',
+            'attendance_closes_at' => '2026-10-27 08:00:00',
+        ]);
+
+        $cancelledSession = $this->createAttendanceSession($section, [
+            'title' => 'Pertemuan Batal',
+            'status' => 'terjadwal',
+            'starts_at' => '2026-11-02 08:00:00',
+            'ends_at' => '2026-11-02 10:00:00',
+            'attendance_opens_at' => '2026-11-02 08:00:00',
+            'attendance_closes_at' => '2026-11-03 08:00:00',
+        ]);
+        $cancelledSession->cancel($lecturer, 'Dosen tugas luar');
+
+        $expiredSession = $this->createAttendanceSession($section, [
+            'title' => 'Pertemuan Kedaluwarsa',
+            'status' => 'terjadwal',
+            'starts_at' => '2026-10-19 08:00:00',
+            'ends_at' => '2026-10-19 10:00:00',
+            'attendance_opens_at' => '2026-10-19 08:00:00',
+            'attendance_closes_at' => '2026-10-20 08:00:00',
+        ]);
+
+        $futureSession = $this->createAttendanceSession($section, [
+            'title' => 'Pertemuan Masa Depan',
+            'status' => 'terjadwal',
+            'starts_at' => '2026-11-09 08:00:00',
+            'ends_at' => '2026-11-09 10:00:00',
+            'attendance_opens_at' => '2026-11-09 08:00:00',
+            'attendance_closes_at' => '2026-11-10 08:00:00',
+        ]);
+
+        // Closed session detail page: shows 'ditutup', no 'Buka Sesi' or 'Batalkan Sesi'
+        $this->actingAs($lecturer)
+            ->get(route('course-sections.attendance-sessions.show', [$section, $closedSession]))
+            ->assertOk()
+            ->assertSeeText('ditutup')
+            ->assertDontSeeText('Buka Sesi')
+            ->assertDontSeeText('Batalkan Sesi');
+
+        // Cancelled session detail page: shows 'dibatalkan', no 'Buka Sesi' or 'Batalkan Sesi'
+        $this->actingAs($lecturer)
+            ->get(route('course-sections.attendance-sessions.show', [$section, $cancelledSession]))
+            ->assertOk()
+            ->assertSeeText('dibatalkan')
+            ->assertDontSeeText('Buka Sesi')
+            ->assertDontSeeText('Batalkan Sesi');
+
+        // Expired session detail page: shows 'kedaluwarsa', no 'Buka Sesi' or 'Batalkan Sesi'
+        $this->actingAs($lecturer)
+            ->get(route('course-sections.attendance-sessions.show', [$section, $expiredSession]))
+            ->assertOk()
+            ->assertSeeText('kedaluwarsa')
+            ->assertDontSeeText('Buka Sesi')
+            ->assertDontSeeText('Batalkan Sesi');
+
+        // Future session detail page: shows 'terjadwal', has 'Batalkan Sesi' but no 'Buka Sesi' yet
+        $this->actingAs($lecturer)
+            ->get(route('course-sections.attendance-sessions.show', [$section, $futureSession]))
+            ->assertOk()
+            ->assertSeeText('terjadwal')
+            ->assertDontSeeText('Buka Sesi')
+            ->assertSeeText('Batalkan Sesi');
+    }
+
+    public function test_lecturer_session_index_orders_todays_schedule_first(): void
+    {
+        // Rabu, 2026-11-04 pukul 08:30 (isoWeekday = 3)
+        Carbon::setTestNow(Carbon::parse('2026-11-04 08:30:00', 'Asia/Jakarta'));
+
+        $section = $this->createCourseSection();
+        $lecturer = User::factory()->create(['role' => UserRole::Dosen->value]);
+        $this->assignLecturer($section, $lecturer);
+
+        // Jadwal Senin (day_of_week = 1)
+        ClassSchedule::query()->create([
+            'course_section_id' => $section->id,
+            'session_type' => 'teori',
+            'delivery_mode' => 'onsite',
+            'day_of_week' => 1,
+            'starts_at' => '08:00',
+            'ends_at' => '10:00',
+            'timezone' => 'Asia/Jakarta',
+            'location' => 'Ruang Senin',
+            'is_active' => true,
+        ]);
+
+        // Jadwal Rabu / Hari Ini (day_of_week = 3)
+        ClassSchedule::query()->create([
+            'course_section_id' => $section->id,
+            'session_type' => 'praktikum',
+            'delivery_mode' => 'onsite',
+            'day_of_week' => 3,
+            'starts_at' => '08:00',
+            'ends_at' => '10:00',
+            'timezone' => 'Asia/Jakarta',
+            'location' => 'Ruang Rabu Hari Ini',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($lecturer)
+            ->get(route('course-sections.attendance-sessions.index', $section))
+            ->assertOk()
+            ->assertSeeTextInOrder(['Ruang Rabu Hari Ini', 'Ruang Senin'])
+            ->assertSeeText('Jadwal Hari Ini')
+            ->assertSeeText('Buka Presensi');
     }
 
     private function createCourseSection(string $name = 'Kelas A', ?AcademicPeriod $period = null): CourseSection

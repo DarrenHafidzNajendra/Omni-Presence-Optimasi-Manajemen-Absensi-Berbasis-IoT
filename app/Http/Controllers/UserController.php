@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\UserRole;
+use App\Models\CourseSection;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -92,10 +93,39 @@ class UserController extends Controller
 
     public function show(User $user): View
     {
+        $user->load(['enrollments.courseSection.course']);
+
         return view('users.show', [
             'user' => $user,
             'roleLabel' => UserRole::tryFrom((string) $user->role)?->name ?? 'Belum ditentukan',
         ]);
+    }
+
+    public function destroy(Request $request, User $user): RedirectResponse
+    {
+        if ($request->user()?->is($user)) {
+            return back()->withErrors([
+                'delete' => 'Anda tidak dapat menghapus akun sendiri.',
+            ]);
+        }
+
+        if ($user->role !== UserRole::Mahasiswa->value) {
+            return back()->withErrors([
+                'delete' => 'Hanya data mahasiswa tanpa riwayat absensi yang dapat dihapus.',
+            ]);
+        }
+
+        if ($user->attendanceRecords()->exists()) {
+            return back()->withErrors([
+                'delete' => 'Data mahasiswa tidak dapat dihapus karena sudah memiliki riwayat presensi. Silakan nonaktifkan akun mahasiswa.',
+            ]);
+        }
+
+        $user->delete();
+
+        return redirect()
+            ->route('users.index')
+            ->with('success', 'Data mahasiswa berhasil dihapus.');
     }
 
     public function updateStatus(Request $request, User $user): RedirectResponse
@@ -177,13 +207,23 @@ class UserController extends Controller
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:255'],
             'role' => ['nullable', Rule::enum(UserRole::class)],
+            'status' => ['nullable', Rule::in(['active', 'inactive', 'aktif', 'nonaktif', '1', '0'])],
+            'course_section_id' => ['nullable', 'integer'],
         ]);
 
         $search = trim($filters['search'] ?? '');
         $selectedRole = $filters['role'] ?? null;
+        $selectedStatus = $filters['status'] ?? null;
+        $selectedCourseSectionId = isset($filters['course_section_id']) ? (int) $filters['course_section_id'] : null;
 
         $users = User::query()
             ->select(['id', 'name', 'email', 'nidn', 'nim', 'role', 'is_active'])
+            ->with([
+                'enrollments' => fn ($query) => $query
+                    ->with('courseSection.course:id,code,name')
+                    ->orderBy('id'),
+            ])
+            ->withCount('attendanceRecords')
             ->when($search !== '', function (Builder $query) use ($search): void {
                 $query->where(function (Builder $query) use ($search): void {
                     $query->where('name', 'like', "%{$search}%")
@@ -195,6 +235,15 @@ class UserController extends Controller
             ->when($selectedRole !== null, function (Builder $query) use ($selectedRole): void {
                 $query->where('role', $selectedRole);
             })
+            ->when($selectedStatus !== null && $selectedStatus !== '', function (Builder $query) use ($selectedStatus): void {
+                $isActive = in_array($selectedStatus, ['active', 'aktif', '1'], true);
+                $query->where('is_active', $isActive);
+            })
+            ->when($selectedCourseSectionId !== null, function (Builder $query) use ($selectedCourseSectionId): void {
+                $query->whereHas('enrollments', function (Builder $enrollmentQuery) use ($selectedCourseSectionId): void {
+                    $enrollmentQuery->where('course_section_id', $selectedCourseSectionId);
+                });
+            })
             ->orderBy('name')
             ->orderBy('id')
             ->paginate(10)
@@ -204,10 +253,19 @@ class UserController extends Controller
             ->mapWithKeys(fn (UserRole $role): array => [$role->value => $role->name])
             ->all();
 
+        $courseSections = CourseSection::query()
+            ->with('course:id,code,name')
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get(['id', 'course_id', 'name']);
+
         return view('users.index', [
             'users' => $users,
             'search' => $search,
             'selectedRole' => $selectedRole,
+            'selectedStatus' => $selectedStatus,
+            'selectedCourseSectionId' => $selectedCourseSectionId,
+            'courseSections' => $courseSections,
             'roles' => $roles,
         ]);
     }

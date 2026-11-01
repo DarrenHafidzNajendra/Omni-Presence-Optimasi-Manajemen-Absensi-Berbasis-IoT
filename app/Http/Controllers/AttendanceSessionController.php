@@ -13,6 +13,7 @@ use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -43,13 +44,76 @@ class AttendanceSessionController extends Controller
     {
         Gate::authorize('viewAny', [AttendanceSession::class, $courseSection]);
 
+        $courseSection->load([
+            'course:id,code,name',
+            'schedules' => fn ($query) => $query
+                ->where('is_active', true)
+                ->orderBy('day_of_week')
+                ->orderBy('starts_at')
+                ->orderBy('id'),
+        ]);
+
         $sessions = $courseSection->attendanceSessions()
-            ->with(['openedBy', 'closedBy', 'cancelledBy'])
+            ->with(['openedBy', 'closedBy', 'cancelledBy', 'classSchedule'])
             ->orderByDesc('starts_at')
             ->orderByDesc('id')
             ->paginate(15);
 
-        return view('attendance-sessions.index', compact('courseSection', 'sessions'));
+        $now = Carbon::now('Asia/Jakarta');
+
+        return view('attendance-sessions.index', compact('courseSection', 'sessions', 'now'));
+    }
+
+    /**
+     * Create and open a regular attendance session directly from a weekly class schedule.
+     */
+    public function openFromSchedule(Request $request, CourseSection $courseSection, ClassSchedule $schedule): RedirectResponse|JsonResponse
+    {
+        Gate::authorize('create', [AttendanceSession::class, $courseSection]);
+
+        if ((int) $schedule->course_section_id !== (int) $courseSection->id) {
+            abort(404, 'Jadwal perkuliahan tidak ditemukan pada kelas ini.');
+        }
+
+        $validator = Validator::make($request->all(), [
+            'title' => ['nullable', 'string', 'max:255'],
+            'allowed_methods' => ['nullable', 'array', 'min:1'],
+            'allowed_methods.*' => [Rule::in(['qr_code', 'face_recognition', 'manual'])],
+            'late_after_minutes' => ['nullable', 'integer', 'min:0', 'max:360'],
+        ]);
+
+        if ($validator->fails()) {
+            if ($request->wantsJson()) {
+                return response()->json(['errors' => $validator->errors()], 422);
+            }
+
+            return back()->withErrors($validator)->withInput();
+        }
+
+        try {
+            $session = AttendanceSession::openFromSchedule(
+                $schedule,
+                $request->user(),
+                $validator->validated(),
+            );
+        } catch (DomainException|InvalidArgumentException $e) {
+            if ($request->wantsJson()) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+
+            return back()->withErrors(['session' => $e->getMessage()])->withInput();
+        }
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'message' => 'Sesi presensi berhasil dibuka.',
+                'data' => $session,
+            ], 201);
+        }
+
+        return redirect()
+            ->route('course-sections.attendance-sessions.show', [$courseSection, $session])
+            ->with('success', 'Sesi presensi berhasil dibuka.');
     }
 
     /**
@@ -165,7 +229,52 @@ class AttendanceSessionController extends Controller
     {
         Gate::authorize('create', [AttendanceSession::class, $courseSection]);
 
-        $validator = Validator::make($request->all(), [
+        $data = $request->all();
+        $selectedSchedule = null;
+
+        if (! empty($data['class_schedule_id'])) {
+            $selectedSchedule = ClassSchedule::query()
+                ->where('course_section_id', $courseSection->id)
+                ->find($data['class_schedule_id']);
+
+            if ($selectedSchedule !== null) {
+                $now = Carbon::now('Asia/Jakarta');
+                $meetingDate = $selectedSchedule->resolveActiveMeetingDate($now) ?? $now->copy()->startOfDay();
+
+                if (empty($data['session_type'])) {
+                    $data['session_type'] = $selectedSchedule->session_type;
+                }
+                if (empty($data['delivery_mode'])) {
+                    $data['delivery_mode'] = $selectedSchedule->delivery_mode;
+                }
+                if (empty($data['starts_at'])) {
+                    $data['starts_at'] = $selectedSchedule->startsAtOnDate($meetingDate)->format('Y-m-d H:i');
+                }
+                if (empty($data['ends_at'])) {
+                    $data['ends_at'] = $selectedSchedule->endsAtOnDate($meetingDate)->format('Y-m-d H:i');
+                }
+                if (empty($data['attendance_opens_at'])) {
+                    $data['attendance_opens_at'] = $data['starts_at'];
+                }
+                if (empty($data['attendance_closes_at']) && ! empty($data['starts_at'])) {
+                    try {
+                        $parsedStart = Carbon::createFromFormat('Y-m-d H:i', (string) $data['starts_at'], 'Asia/Jakarta');
+                        $data['attendance_closes_at'] = $parsedStart->copy()->addHours(AttendanceSession::MAX_DURATION_HOURS)->format('Y-m-d H:i');
+                    } catch (\Throwable) {
+                        // Let the date_format validator handle invalid starts_at format
+                    }
+                }
+                if (empty($data['title'])) {
+                    $nextNumber = $courseSection->attendanceSessions()->whereNull('cancelled_at')->count() + 1;
+                    $data['title'] = "Pertemuan {$nextNumber}";
+                }
+                if (empty($data['allowed_methods'])) {
+                    $data['allowed_methods'] = ['manual', 'qr_code', 'face_recognition'];
+                }
+            }
+        }
+
+        $validator = Validator::make($data, [
             'class_schedule_id' => [
                 'nullable',
                 'integer',
@@ -185,15 +294,15 @@ class AttendanceSessionController extends Controller
             'late_after_minutes' => ['nullable', 'integer', 'min:0', 'max:360'],
         ]);
 
-        $validator->after(function (ValidatorContract $validator) use ($request): void {
+        $validator->after(function (ValidatorContract $validator) use ($data, $selectedSchedule): void {
             if ($validator->errors()->isNotEmpty()) {
                 return;
             }
 
-            $startsAt = CarbonImmutable::createFromFormat('Y-m-d H:i', $request->input('starts_at'));
-            $endsAt = CarbonImmutable::createFromFormat('Y-m-d H:i', $request->input('ends_at'));
-            $opensAt = CarbonImmutable::createFromFormat('Y-m-d H:i', $request->input('attendance_opens_at'));
-            $closesAt = CarbonImmutable::createFromFormat('Y-m-d H:i', $request->input('attendance_closes_at'));
+            $startsAt = CarbonImmutable::createFromFormat('Y-m-d H:i', (string) $data['starts_at'], 'Asia/Jakarta');
+            $endsAt = CarbonImmutable::createFromFormat('Y-m-d H:i', (string) $data['ends_at'], 'Asia/Jakarta');
+            $opensAt = CarbonImmutable::createFromFormat('Y-m-d H:i', (string) $data['attendance_opens_at'], 'Asia/Jakarta');
+            $closesAt = CarbonImmutable::createFromFormat('Y-m-d H:i', (string) $data['attendance_closes_at'], 'Asia/Jakarta');
 
             if ($endsAt->isBefore($startsAt)) {
                 $validator->errors()->add('ends_at', 'Waktu selesai perkuliahan harus setelah atau sama dengan waktu mulai.');
@@ -203,14 +312,31 @@ class AttendanceSessionController extends Controller
                 $validator->errors()->add('attendance_closes_at', 'Waktu tutup absensi harus setelah atau sama dengan waktu buka absensi.');
             }
 
-            $scheduleId = $request->input('class_schedule_id');
-            if ($scheduleId) {
-                $schedule = ClassSchedule::find($scheduleId);
-                if ($schedule && $schedule->day_of_week) {
+            if ($closesAt->gt($startsAt->addHours(AttendanceSession::MAX_DURATION_HOURS))) {
+                $validator->errors()->add('attendance_closes_at', 'Waktu tutup absensi tidak boleh melewati 24 jam dari waktu mulai perkuliahan.');
+            }
+
+            if ($selectedSchedule !== null) {
+                if ($selectedSchedule->day_of_week) {
                     $dayOfWeekIso = (int) $startsAt->isoWeekday();
-                    if ($dayOfWeekIso !== (int) $schedule->day_of_week) {
+                    if ($dayOfWeekIso !== (int) $selectedSchedule->day_of_week) {
                         $validator->errors()->add('starts_at', 'Hari pelaksanaan sesi tidak sesuai dengan hari jadwal perkuliahan yang dipilih.');
+
+                        return;
                     }
+                }
+
+                $scheduledStartOnDate = CarbonImmutable::parse(
+                    $startsAt->format('Y-m-d').' '.substr((string) $selectedSchedule->starts_at, 0, 5),
+                    'Asia/Jakarta'
+                );
+
+                if ($startsAt->lt($scheduledStartOnDate)) {
+                    $validator->errors()->add('starts_at', 'Waktu mulai sesi tidak boleh sebelum waktu mulai jadwal perkuliahan.');
+                }
+
+                if (CarbonImmutable::now('Asia/Jakarta')->lt($scheduledStartOnDate)) {
+                    $validator->errors()->add('starts_at', 'Sesi reguler belum dapat dibuat sebelum waktu mulai jadwal perkuliahan.');
                 }
             }
         });
@@ -225,10 +351,57 @@ class AttendanceSessionController extends Controller
 
         $validated = $validator->validated();
 
-        $session = $courseSection->attendanceSessions()->create(array_merge($validated, [
-            'status' => 'terjadwal',
-            'session_kind' => 'regular',
-        ]));
+        try {
+            $session = DB::transaction(function () use ($courseSection, $selectedSchedule, $validated): AttendanceSession {
+                CourseSection::query()->whereKey($courseSection->getKey())->lockForUpdate()->first();
+
+                if ($selectedSchedule !== null) {
+                    ClassSchedule::query()->whereKey($selectedSchedule->getKey())->lockForUpdate()->first();
+                }
+
+                $startsAtCarbon = Carbon::createFromFormat('Y-m-d H:i', (string) $validated['starts_at'], 'Asia/Jakarta');
+
+                $duplicateExists = $courseSection->attendanceSessions()
+                    ->whereNull('cancelled_at')
+                    ->where(function ($query) use ($validated, $startsAtCarbon): void {
+                        if (! empty($validated['class_schedule_id'])) {
+                            $query->where(function ($q) use ($validated, $startsAtCarbon): void {
+                                $q->where('class_schedule_id', $validated['class_schedule_id'])
+                                    ->whereBetween('starts_at', [
+                                        $startsAtCarbon->copy()->startOfDay(),
+                                        $startsAtCarbon->copy()->endOfDay(),
+                                    ]);
+                            })->orWhere(function ($q) use ($startsAtCarbon): void {
+                                $q->where('session_kind', 'regular')
+                                    ->where('starts_at', $startsAtCarbon);
+                            });
+                        } else {
+                            $query->where('session_kind', 'regular')
+                                ->where('starts_at', $startsAtCarbon);
+                        }
+                    })
+                    ->lockForUpdate()
+                    ->exists();
+
+                if ($duplicateExists) {
+                    throw new DomainException('Sesi absensi untuk jadwal dan tanggal pertemuan ini sudah ada.');
+                }
+
+                return $courseSection->attendanceSessions()->create(array_merge($validated, [
+                    'status' => 'terjadwal',
+                    'session_kind' => 'regular',
+                ]));
+            });
+        } catch (DomainException $e) {
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'message' => $e->getMessage(),
+                    'errors' => ['starts_at' => [$e->getMessage()]],
+                ], 422);
+            }
+
+            return back()->withErrors(['starts_at' => $e->getMessage()])->withInput();
+        }
 
         if ($request->wantsJson()) {
             return response()->json([

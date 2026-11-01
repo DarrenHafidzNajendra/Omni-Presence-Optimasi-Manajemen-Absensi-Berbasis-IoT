@@ -118,51 +118,103 @@
             </div>
         </section>
 
+        @php
+            $sectionEnrollments = $enrollments ?? $courseSection->enrollments;
+            $enrolledTotal = (int) ($totalEnrolledCount ?? $sectionEnrollments->count());
+            $filteredTotal = method_exists($sectionEnrollments, 'total') ? (int) $sectionEnrollments->total() : $sectionEnrollments->count();
+        @endphp
+
         <section aria-labelledby="enrollments-heading" class="space-y-4">
-            <div>
-                <h2 id="enrollments-heading" class="text-lg font-semibold text-slate-950">Mahasiswa terdaftar</h2>
-                <p class="mt-1 text-sm text-slate-500">Mahasiswa yang mengikuti kelas ini.</p>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                    <h2 id="enrollments-heading" class="text-lg font-semibold text-slate-950">Mahasiswa terdaftar</h2>
+                    <p class="mt-1 text-sm text-slate-500">Mahasiswa mendaftar ke kelas ini secara mandiri melalui akun masing-masing.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2" data-enrollment-summary>
+                    <span class="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">
+                        {{ $enrolledTotal }} Mahasiswa Terdaftar
+                    </span>
+                    @if (($studentSearch ?? '') !== '')
+                        <span class="inline-flex items-center rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700">
+                            {{ $filteredTotal }} sesuai pencarian
+                        </span>
+                    @endif
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                <form method="GET" action="{{ route('course-sections.show', $courseSection) }}" class="flex flex-col gap-3 sm:flex-row sm:items-end">
+                    <div class="flex-1 space-y-1.5">
+                        <label for="student_search" class="block text-sm font-medium text-slate-700">Cari nama atau NIM mahasiswa</label>
+                        <input
+                            id="student_search"
+                            name="student_search"
+                            type="search"
+                            value="{{ $studentSearch ?? '' }}"
+                            placeholder="Masukkan nama atau NIM mahasiswa"
+                            class="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                        >
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button
+                            type="submit"
+                            class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
+                        >
+                            Cari Mahasiswa
+                        </button>
+                        @if (($studentSearch ?? '') !== '')
+                            <a
+                                href="{{ route('course-sections.show', $courseSection) }}"
+                                class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                            >
+                                Reset
+                            </a>
+                        @endif
+                    </div>
+                </form>
             </div>
 
             <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                @if ($courseSection->enrollments->isEmpty())
+                @if ($enrolledTotal === 0)
                     <p class="px-5 py-6 text-sm text-slate-500 sm:px-8">Belum ada mahasiswa terdaftar.</p>
+                @elseif ($sectionEnrollments->isEmpty())
+                    <p class="px-5 py-6 text-sm text-slate-500 sm:px-8">Tidak ada mahasiswa terdaftar yang sesuai pencarian.</p>
                 @else
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-slate-200 text-left">
                             <thead class="bg-slate-50">
                                 <tr>
-                                    <th scope="col" class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500 sm:px-8">Nama</th>
-                                    <th scope="col" class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">NIM</th>
-                                    <th scope="col" class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Status Akun</th>
-                                    <th scope="col" class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Status Enrollment</th>
-                                    <th scope="col" class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Aksi</th>
+                                    <th scope="col" class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 sm:px-8">Nama</th>
+                                    <th scope="col" class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">NIM</th>
+                                    <th scope="col" class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Status Akun</th>
+                                    <th scope="col" class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Status Enrollment</th>
+                                    <th scope="col" class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Aksi</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
-                                @foreach ($courseSection->enrollments as $enrollment)
-                                    <tr>
-                                        <td class="whitespace-nowrap px-5 py-4 text-sm font-medium text-slate-900 sm:px-8">{{ $enrollment->student->name }}</td>
-                                        <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-600">{{ $enrollment->student->nim }}</td>
-                                        <td class="px-5 py-4 text-sm">
+                                @foreach ($sectionEnrollments as $enrollment)
+                                    <tr class="transition hover:bg-slate-50/70">
+                                        <td class="whitespace-nowrap px-5 py-3.5 text-sm font-medium text-slate-900 sm:px-8">{{ $enrollment->student->name }}</td>
+                                        <td class="whitespace-nowrap px-5 py-3.5 text-sm text-slate-600">{{ $enrollment->student->nim }}</td>
+                                        <td class="px-5 py-3.5 text-sm">
                                             <span @class([
-                                                'inline-flex rounded-full px-2.5 py-1 text-xs font-medium',
+                                                'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium',
                                                 'bg-emerald-100 text-emerald-800' => $enrollment->student->is_active,
                                                 'bg-red-100 text-red-800' => ! $enrollment->student->is_active,
                                             ])>
                                                 {{ $enrollment->student->is_active ? 'Aktif' : 'Nonaktif' }}
                                             </span>
                                         </td>
-                                        <td class="px-5 py-4 text-sm">
+                                        <td class="px-5 py-3.5 text-sm">
                                             <span @class([
-                                                'inline-flex rounded-full px-2.5 py-1 text-xs font-medium',
+                                                'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium',
                                                 'bg-emerald-100 text-emerald-800' => $enrollment->status === 'aktif',
                                                 'bg-slate-100 text-slate-700' => $enrollment->status === 'nonaktif',
                                             ])>
                                                 {{ ucfirst($enrollment->status) }}
                                             </span>
                                         </td>
-                                        <td class="whitespace-nowrap px-5 py-4 text-sm">
+                                        <td class="whitespace-nowrap px-5 py-3.5 text-sm">
                                             <div class="flex items-center gap-3">
                                                 <form method="POST" action="{{ route('course-sections.enrollments.status', [$courseSection, $enrollment]) }}">
                                                     @csrf
@@ -184,43 +236,13 @@
                             </tbody>
                         </table>
                     </div>
+
+                    @if (method_exists($sectionEnrollments, 'hasPages') && $sectionEnrollments->hasPages())
+                        <div class="border-t border-slate-200 px-5 py-4 sm:px-8" data-enrollment-pagination>
+                            {{ $sectionEnrollments->links() }}
+                        </div>
+                    @endif
                 @endif
-            </div>
-        </section>
-
-        <section aria-labelledby="enroll-student-heading" class="space-y-4">
-            <div>
-                <h2 id="enroll-student-heading" class="text-lg font-semibold text-slate-950">Daftarkan mahasiswa</h2>
-                <p class="mt-1 text-sm text-slate-500">Pilih mahasiswa aktif yang belum terdaftar di kelas ini.</p>
-            </div>
-
-            <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-                <form method="POST" action="{{ route('course-sections.enrollments.store', $courseSection) }}" class="space-y-6">
-                    @csrf
-                    <div class="space-y-2">
-                        <label for="student_id" class="block text-sm font-medium text-slate-700">Mahasiswa</label>
-                        <select
-                            id="student_id"
-                            name="student_id"
-                            required
-                            class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
-                            @error('student_id') aria-invalid="true" aria-describedby="student-id-error" @enderror
-                        >
-                            <option value="">Pilih mahasiswa</option>
-                            @foreach ($enrollmentOptions as $student)
-                                <option value="{{ $student->id }}" @selected((string) old('student_id') === (string) $student->id)>
-                                    {{ $student->name }} ({{ $student->nim }})
-                                </option>
-                            @endforeach
-                        </select>
-                        @error('student_id')
-                            <p id="student-id-error" class="text-sm text-red-700">{{ $message }}</p>
-                        @enderror
-                    </div>
-                    <button type="submit" class="inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/25 sm:w-auto">
-                        Daftarkan Mahasiswa
-                    </button>
-                </form>
             </div>
         </section>
 
