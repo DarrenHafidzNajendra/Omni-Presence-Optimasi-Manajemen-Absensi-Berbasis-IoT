@@ -4,12 +4,28 @@
 
 @section('content')
     <div class="mx-auto max-w-3xl space-y-8">
-        <section class="space-y-2">
-            <p class="text-sm font-semibold tracking-wide text-blue-700">AKADEMIK</p>
-            <h1 class="text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">Detail Kelas</h1>
-            <p class="max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-                Informasi kelas {{ $courseSection->name }} yang terdaftar di Omni-Presence.
-            </p>
+        <section class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div class="space-y-2">
+                <p class="text-sm font-semibold tracking-wide text-blue-700">AKADEMIK</p>
+                <h1 class="text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">Detail Kelas</h1>
+                <p class="max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
+                    Informasi kelas {{ $courseSection->name }} yang terdaftar di Omni-Presence.
+                </p>
+            </div>
+            <div class="flex items-center gap-3">
+                <a
+                    href="{{ route('course-sections.attendance-recap', $courseSection) }}"
+                    class="inline-flex shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-500/25"
+                >
+                    Rekap Kehadiran
+                </a>
+                <a
+                    href="{{ route('course-sections.attendance-sessions.index', $courseSection) }}"
+                    class="inline-flex shrink-0 items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
+                >
+                    Kelola Sesi Absensi
+                </a>
+            </div>
         </section>
 
         @if (session('success'))
@@ -30,6 +46,15 @@
                 <div class="grid gap-2 px-5 py-4 sm:grid-cols-[12rem_minmax(0,1fr)] sm:gap-6 sm:px-8">
                     <dt class="text-sm font-medium text-slate-500">Nama Kelas</dt>
                     <dd class="text-sm font-semibold text-slate-900">{{ $courseSection->name }}</dd>
+                </div>
+                <div class="grid gap-2 px-5 py-4 sm:grid-cols-[12rem_minmax(0,1fr)] sm:gap-6 sm:px-8">
+                    <dt class="text-sm font-medium text-slate-500">Periode Akademik</dt>
+                    <dd class="text-sm text-slate-900">
+                        {{ $courseSection->academicPeriod?->name ?? 'Belum ditentukan' }}
+                        @if ($courseSection->academicPeriod && ! $courseSection->academicPeriod->is_active)
+                            <span class="text-xs text-slate-500">(Nonaktif)</span>
+                        @endif
+                    </dd>
                 </div>
                 <div class="grid gap-2 px-5 py-4 sm:grid-cols-[12rem_minmax(0,1fr)] sm:gap-6 sm:px-8">
                     <dt class="text-sm font-medium text-slate-500">Tahun Akademik</dt>
@@ -89,6 +114,134 @@
                             </tbody>
                         </table>
                     </div>
+                @endif
+            </div>
+        </section>
+
+        @php
+            $sectionEnrollments = $enrollments ?? $courseSection->enrollments;
+            $enrolledTotal = (int) ($totalEnrolledCount ?? $sectionEnrollments->count());
+            $filteredTotal = method_exists($sectionEnrollments, 'total') ? (int) $sectionEnrollments->total() : $sectionEnrollments->count();
+        @endphp
+
+        <section aria-labelledby="enrollments-heading" class="space-y-4">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                    <h2 id="enrollments-heading" class="text-lg font-semibold text-slate-950">Mahasiswa terdaftar</h2>
+                    <p class="mt-1 text-sm text-slate-500">Mahasiswa mendaftar ke kelas ini secara mandiri melalui akun masing-masing.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2" data-enrollment-summary>
+                    <span class="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">
+                        {{ $enrolledTotal }} Mahasiswa Terdaftar
+                    </span>
+                    @if (($studentSearch ?? '') !== '')
+                        <span class="inline-flex items-center rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700">
+                            {{ $filteredTotal }} sesuai pencarian
+                        </span>
+                    @endif
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                <form method="GET" action="{{ route('course-sections.show', $courseSection) }}" class="flex flex-col gap-3 sm:flex-row sm:items-end">
+                    <div class="flex-1 space-y-1.5">
+                        <label for="student_search" class="block text-sm font-medium text-slate-700">Cari nama atau NIM mahasiswa</label>
+                        <input
+                            id="student_search"
+                            name="student_search"
+                            type="search"
+                            value="{{ $studentSearch ?? '' }}"
+                            placeholder="Masukkan nama atau NIM mahasiswa"
+                            class="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                        >
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button
+                            type="submit"
+                            class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
+                        >
+                            Cari Mahasiswa
+                        </button>
+                        @if (($studentSearch ?? '') !== '')
+                            <a
+                                href="{{ route('course-sections.show', $courseSection) }}"
+                                class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                            >
+                                Reset
+                            </a>
+                        @endif
+                    </div>
+                </form>
+            </div>
+
+            <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                @if ($enrolledTotal === 0)
+                    <p class="px-5 py-6 text-sm text-slate-500 sm:px-8">Belum ada mahasiswa terdaftar.</p>
+                @elseif ($sectionEnrollments->isEmpty())
+                    <p class="px-5 py-6 text-sm text-slate-500 sm:px-8">Tidak ada mahasiswa terdaftar yang sesuai pencarian.</p>
+                @else
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-slate-200 text-left">
+                            <thead class="bg-slate-50">
+                                <tr>
+                                    <th scope="col" class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 sm:px-8">Nama</th>
+                                    <th scope="col" class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">NIM</th>
+                                    <th scope="col" class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Status Akun</th>
+                                    <th scope="col" class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Status Enrollment</th>
+                                    <th scope="col" class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @foreach ($sectionEnrollments as $enrollment)
+                                    <tr class="transition hover:bg-slate-50/70">
+                                        <td class="whitespace-nowrap px-5 py-3.5 text-sm font-medium text-slate-900 sm:px-8">{{ $enrollment->student->name }}</td>
+                                        <td class="whitespace-nowrap px-5 py-3.5 text-sm text-slate-600">{{ $enrollment->student->nim }}</td>
+                                        <td class="px-5 py-3.5 text-sm">
+                                            <span @class([
+                                                'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium',
+                                                'bg-emerald-100 text-emerald-800' => $enrollment->student->is_active,
+                                                'bg-red-100 text-red-800' => ! $enrollment->student->is_active,
+                                            ])>
+                                                {{ $enrollment->student->is_active ? 'Aktif' : 'Nonaktif' }}
+                                            </span>
+                                        </td>
+                                        <td class="px-5 py-3.5 text-sm">
+                                            <span @class([
+                                                'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium',
+                                                'bg-emerald-100 text-emerald-800' => $enrollment->status === 'aktif',
+                                                'bg-slate-100 text-slate-700' => $enrollment->status === 'nonaktif',
+                                            ])>
+                                                {{ ucfirst($enrollment->status) }}
+                                            </span>
+                                        </td>
+                                        <td class="whitespace-nowrap px-5 py-3.5 text-sm">
+                                            <div class="flex items-center gap-3">
+                                                <form method="POST" action="{{ route('course-sections.enrollments.status', [$courseSection, $enrollment]) }}">
+                                                    @csrf
+                                                    @method('PATCH')
+                                                    <input type="hidden" name="status" value="{{ $enrollment->status === 'aktif' ? 'nonaktif' : 'aktif' }}">
+                                                    <button type="submit" class="font-semibold text-blue-700 hover:text-blue-900">
+                                                        {{ $enrollment->status === 'aktif' ? 'Nonaktifkan' : 'Aktifkan' }}
+                                                    </button>
+                                                </form>
+                                                <form method="POST" action="{{ route('course-sections.enrollments.destroy', [$courseSection, $enrollment]) }}" onsubmit="return confirm('Hapus enrollment mahasiswa ini?')">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="font-semibold text-red-700 hover:text-red-900">Hapus</button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @if (method_exists($sectionEnrollments, 'hasPages') && $sectionEnrollments->hasPages())
+                        <div class="border-t border-slate-200 px-5 py-4 sm:px-8" data-enrollment-pagination>
+                            {{ $sectionEnrollments->links() }}
+                        </div>
+                    @endif
                 @endif
             </div>
         </section>

@@ -3,7 +3,7 @@
 @section('title', 'Jadwal Kelas')
 
 @section('content')
-    <div class="mx-auto max-w-5xl space-y-8">
+    <div class="mx-auto max-w-6xl space-y-8">
         <section class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div class="space-y-2">
                 <p class="text-sm font-semibold tracking-wide text-blue-700">AKADEMIK</p>
@@ -29,10 +29,12 @@
                     <table class="min-w-full divide-y divide-slate-200 text-left">
                         <thead class="bg-slate-50">
                             <tr>
-                                <th class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Sesi</th>
-                                <th class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Hari & Waktu</th>
-                                <th class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Lokasi</th>
-                                <th class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Periode</th>
+                                <th class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Kelas</th>
+                                <th class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Mata Kuliah</th>
+                                <th class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Dosen Pengampu</th>
+                                <th class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Hari</th>
+                                <th class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Jam Mulai &amp; Selesai</th>
+                                <th class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Ruangan / Mode</th>
                                 <th class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
                                 <th class="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Aksi</th>
                             </tr>
@@ -40,24 +42,34 @@
                         <tbody class="divide-y divide-slate-100">
                             @foreach ($schedules as $schedule)
                                 <tr>
-                                    <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-700">
-                                        <span class="font-semibold capitalize text-slate-900">{{ $schedule->session_type }}</span>
-                                        <span class="block text-xs capitalize text-slate-500">{{ $schedule->delivery_mode }}</span>
+                                    <td class="whitespace-nowrap px-5 py-4 text-sm font-semibold text-slate-900">
+                                        {{ $courseSection->name }}
                                     </td>
                                     <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-700">
-                                        {{ $days[$schedule->day_of_week] ?? '-' }}<br>
+                                        <span class="block font-semibold text-slate-900">{{ $courseSection->course->code }}</span>
+                                        <span class="block text-xs text-slate-500">{{ $courseSection->course->name }}</span>
+                                    </td>
+                                    <td class="px-5 py-4 text-xs text-slate-700">
+                                        @forelse ($courseSection->lecturers as $assignment)
+                                            <div class="font-medium text-slate-900">{{ $assignment->user?->name ?? '-' }}</div>
+                                        @empty
+                                            <span class="text-slate-400">Belum ditugaskan</span>
+                                        @endforelse
+                                    </td>
+                                    <td class="whitespace-nowrap px-5 py-4 text-sm font-medium text-slate-900">
+                                        {{ $days[$schedule->day_of_week] ?? '-' }}
+                                    </td>
+                                    <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-700">
                                         {{ substr((string) $schedule->starts_at, 0, 5) }} - {{ substr((string) $schedule->ends_at, 0, 5) }}
+                                        <span class="block text-xs capitalize text-slate-500">{{ $schedule->session_type }}</span>
                                     </td>
                                     <td class="max-w-xs px-5 py-4 text-sm text-slate-700">
+                                        <span class="block text-xs font-semibold capitalize text-slate-900">{{ $schedule->delivery_mode }}</span>
                                         @if ($schedule->delivery_mode === 'online')
-                                            <a href="{{ $schedule->meeting_url }}" target="_blank" rel="noopener noreferrer" class="break-all text-blue-700 hover:underline">{{ $schedule->meeting_url }}</a>
+                                            <a href="{{ $schedule->meeting_url }}" target="_blank" rel="noopener noreferrer" class="break-all text-xs text-blue-700 hover:underline">{{ $schedule->meeting_url }}</a>
                                         @else
-                                            {{ $schedule->location }}
+                                            <span class="text-xs text-slate-600">{{ $schedule->location }}</span>
                                         @endif
-                                    </td>
-                                    <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-700">
-                                        {{ $schedule->valid_from?->format('d/m/Y') ?? 'Tanpa batas' }} -
-                                        {{ $schedule->valid_until?->format('d/m/Y') ?? 'Tanpa batas' }}
                                     </td>
                                     <td class="px-5 py-4 text-sm">
                                         <span @class(['inline-flex rounded-full px-2.5 py-1 text-xs font-medium', 'bg-emerald-100 text-emerald-800' => $schedule->is_active, 'bg-red-100 text-red-800' => ! $schedule->is_active])>{{ $schedule->is_active ? 'Aktif' : 'Nonaktif' }}</span>

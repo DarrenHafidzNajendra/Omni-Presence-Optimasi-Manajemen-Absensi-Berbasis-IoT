@@ -30,7 +30,7 @@ class UserCreationTest extends TestCase
             ->assertSee('name="password_confirmation"', false)
             ->assertSee('name="nidn"', false)
             ->assertSee('inputmode="numeric"', false)
-            ->assertSee('pattern="[0-9]{6}"', false)
+            // pattern 6 removed
             ->assertSee('pattern="[0-9]{10}"', false)
             ->assertSee('value="admin"', false)
             ->assertSee('value="dosen"', false)
@@ -161,8 +161,8 @@ class UserCreationTest extends TestCase
 
         $response = $this->actingAs($admin)->post(route('users.store'), [
             'name' => 'Pengguna Baru',
-            'nim' => '0123456789',
-            'role' => UserRole::Mahasiswa->value,
+            'email' => 'pengguna.baru@example.com',
+            'role' => UserRole::Admin->value,
             'password' => 'strong-password',
             'password_confirmation' => 'different-password',
         ]);
@@ -177,8 +177,8 @@ class UserCreationTest extends TestCase
 
         $response = $this->actingAs($admin)->post(route('users.store'), [
             'name' => 'Pengguna Baru',
-            'nim' => '0123456789',
-            'role' => UserRole::Mahasiswa->value,
+            'email' => 'pengguna.baru@example.com',
+            'role' => UserRole::Admin->value,
             'password' => 'short',
             'password_confirmation' => 'short',
         ]);
@@ -194,7 +194,7 @@ class UserCreationTest extends TestCase
     {
         return [
             'admin email' => [UserRole::Admin->value, 'email', 'duplicate@example.com'],
-            'dosen NIDN' => [UserRole::Dosen->value, 'nidn', '123456'],
+            'dosen NIDN' => [UserRole::Dosen->value, 'nidn', '1234567890'],
             'mahasiswa NIM' => [UserRole::Mahasiswa->value, 'nim', '1234567890'],
         ];
     }
@@ -240,7 +240,7 @@ class UserCreationTest extends TestCase
     {
         return [
             'admin email' => [UserRole::Admin->value, 'email', 'admin-new@example.com', 'admin-new@example.com', null, null],
-            'dosen NIDN' => [UserRole::Dosen->value, 'nidn', '123456', null, '123456', null],
+            'dosen NIDN' => [UserRole::Dosen->value, 'nidn', '1234567890', null, '1234567890', null],
             'mahasiswa NIM' => [UserRole::Mahasiswa->value, 'nim', '1234567890', null, null, '1234567890'],
         ];
     }
@@ -251,12 +251,12 @@ class UserCreationTest extends TestCase
     public static function invalidRoleIdentities(): array
     {
         return [
-            'NIDN too short' => [UserRole::Dosen->value, 'nidn', '12345'],
-            'NIDN too long' => [UserRole::Dosen->value, 'nidn', '1234567'],
-            'NIDN contains letters' => [UserRole::Dosen->value, 'nidn', '12A456'],
-            'NIDN contains symbols' => [UserRole::Dosen->value, 'nidn', '12-456'],
-            'NIDN contains whitespace' => [UserRole::Dosen->value, 'nidn', '12 456'],
-            'NIDN contains non-ASCII digits' => [UserRole::Dosen->value, 'nidn', '١٢٣٤٥٦'],
+            'NIDN too short' => [UserRole::Dosen->value, 'nidn', '123456789'],
+            'NIDN too long' => [UserRole::Dosen->value, 'nidn', '12345678901'],
+            'NIDN contains letters' => [UserRole::Dosen->value, 'nidn', '123456789A'],
+            'NIDN contains symbols' => [UserRole::Dosen->value, 'nidn', '12345678-0'],
+            'NIDN contains whitespace' => [UserRole::Dosen->value, 'nidn', '1234 67890'],
+            'NIDN contains non-ASCII digits' => [UserRole::Dosen->value, 'nidn', '٠١٢٣٤٥٦٧٨٩'],
             'NIM too short' => [UserRole::Mahasiswa->value, 'nim', '123456789'],
             'NIM too long' => [UserRole::Mahasiswa->value, 'nim', '12345678901'],
             'NIM contains letters' => [UserRole::Mahasiswa->value, 'nim', '123456789A'],
@@ -292,7 +292,7 @@ class UserCreationTest extends TestCase
 
         $this->actingAs($admin)->post(route('users.store'), [
             'name' => 'Dosen Nol Awal',
-            'nidn' => '001234',
+            'nidn' => '0012345678',
             'role' => UserRole::Dosen->value,
             'password' => 'strong-password',
             'password_confirmation' => 'strong-password',
@@ -306,7 +306,7 @@ class UserCreationTest extends TestCase
             'password_confirmation' => 'strong-password',
         ])->assertRedirectToRoute('users.index');
 
-        $this->assertSame('001234', User::query()->where('name', 'Dosen Nol Awal')->value('nidn'));
+        $this->assertSame('0012345678', User::query()->where('name', 'Dosen Nol Awal')->value('nidn'));
         $this->assertSame('0012345678', User::query()->where('name', 'Mahasiswa Nol Awal')->value('nim'));
     }
 

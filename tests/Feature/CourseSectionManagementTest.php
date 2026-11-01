@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AcademicPeriod;
 use App\Models\Course;
 use App\Models\CourseSection;
 use App\Models\User;
@@ -33,18 +34,21 @@ class CourseSectionManagementTest extends TestCase
     public function test_admin_can_view_course_section_list_and_create_form(): void
     {
         $course = Course::query()->create(['code' => 'CS401', 'name' => 'Analisis Data']);
+        $academicPeriod = $this->createAcademicPeriod();
         $admin = User::factory()->create(['role' => 'admin']);
 
         $this->actingAs($admin)->get(route('course-sections.index'))
             ->assertOk()
             ->assertSeeText('Daftar Kelas')
-            ->assertSeeText('Tambah Kelas');
+            ->assertSeeText('Tambah Kelas')
+            ->assertSee('href="'.route('academic-periods.index').'"', false);
 
         $this->actingAs($admin)->get(route('course-sections.create'))
             ->assertOk()
             ->assertSeeText('Tambah Kelas')
             ->assertSeeText('CS401 - Analisis Data')
             ->assertSee('name="course_id"', false)
+            ->assertSee('name="academic_period_id"', false)
             ->assertSee('name="name"', false)
             ->assertSee('name="academic_year"', false)
             ->assertSee('name="semester"', false);
@@ -70,6 +74,8 @@ class CourseSectionManagementTest extends TestCase
             ->assertSeeText('2026/2027')
             ->assertSeeText('Genap')
             ->assertSeeText('Aktif')
+            ->assertSee('href="'.route('course-sections.attendance-sessions.index', $courseSection).'"', false)
+            ->assertSeeText('Kelola Sesi Absensi')
             ->assertSee('href="'.route('course-sections.edit', $courseSection).'"', false);
 
         $this->actingAs($admin)->get(route('course-sections.edit', $courseSection))
@@ -109,10 +115,14 @@ class CourseSectionManagementTest extends TestCase
 
     public function test_non_admin_users_cannot_access_course_section_pages(): void
     {
+        $student = User::factory()->create(['role' => 'mahasiswa']);
+        $this->actingAs($student)->get(route('course-sections.index'))->assertForbidden();
+        $this->actingAs($student)->get(route('course-sections.create'))->assertForbidden();
+        $this->actingAs($student)->post(route('course-sections.store'))->assertForbidden();
+
         foreach (['dosen', 'mahasiswa'] as $role) {
             $user = User::factory()->create(['role' => $role]);
 
-            $this->actingAs($user)->get(route('course-sections.index'))->assertForbidden();
             $this->actingAs($user)->get(route('course-sections.create'))->assertForbidden();
             $this->actingAs($user)->post(route('course-sections.store'))->assertForbidden();
 
@@ -135,10 +145,12 @@ class CourseSectionManagementTest extends TestCase
     public function test_admin_can_create_a_course_section(): void
     {
         $course = Course::query()->create(['code' => 'CS402', 'name' => 'Pemrograman Lanjut']);
+        $academicPeriod = $this->createAcademicPeriod();
         $admin = User::factory()->create(['role' => 'admin']);
 
         $response = $this->actingAs($admin)->post(route('course-sections.store'), [
             'course_id' => $course->id,
+            'academic_period_id' => $academicPeriod->id,
             'name' => 'Kelas A',
             'academic_year' => '2026/2027',
             'semester' => 'ganjil',
@@ -148,6 +160,7 @@ class CourseSectionManagementTest extends TestCase
             ->assertSessionHas('success', 'Kelas berhasil ditambahkan.');
         $this->assertDatabaseHas('course_sections', [
             'course_id' => $course->id,
+            'academic_period_id' => $academicPeriod->id,
             'name' => 'Kelas A',
             'academic_year' => '2026/2027',
             'semester' => 'ganjil',
@@ -159,6 +172,7 @@ class CourseSectionManagementTest extends TestCase
     {
         $oldCourse = Course::query()->create(['code' => 'CS409', 'name' => 'Kursus Lama']);
         $newCourse = Course::query()->create(['code' => 'CS410', 'name' => 'Kursus Baru']);
+        $academicPeriod = $this->createAcademicPeriod();
         $courseSection = CourseSection::query()->create([
             'course_id' => $oldCourse->id,
             'name' => 'Kelas Lama',
@@ -169,6 +183,7 @@ class CourseSectionManagementTest extends TestCase
 
         $response = $this->actingAs($admin)->put(route('course-sections.update', $courseSection), [
             'course_id' => $newCourse->id,
+            'academic_period_id' => $academicPeriod->id,
             'name' => 'Kelas Baru',
             'academic_year' => '2026/2027',
             'semester' => 'genap',
@@ -188,6 +203,7 @@ class CourseSectionManagementTest extends TestCase
     public function test_course_section_can_keep_its_existing_unique_combination(): void
     {
         $course = Course::query()->create(['code' => 'CS411', 'name' => 'Kompilasi']);
+        $academicPeriod = $this->createAcademicPeriod();
         $courseSection = CourseSection::query()->create([
             'course_id' => $course->id,
             'name' => 'Kelas A',
@@ -198,6 +214,7 @@ class CourseSectionManagementTest extends TestCase
 
         $response = $this->actingAs($admin)->put(route('course-sections.update', $courseSection), [
             'course_id' => $course->id,
+            'academic_period_id' => $academicPeriod->id,
             'name' => 'Kelas A',
             'academic_year' => '2026/2027',
             'semester' => 'ganjil',
@@ -428,7 +445,7 @@ class CourseSectionManagementTest extends TestCase
             ]);
 
         $response->assertRedirectToRoute('course-sections.create')
-            ->assertSessionHasErrors(['course_id', 'name', 'academic_year', 'semester']);
+            ->assertSessionHasErrors(['course_id', 'academic_period_id', 'name', 'academic_year', 'semester']);
         $this->assertDatabaseCount('course_sections', 0);
     }
 
@@ -503,5 +520,289 @@ class CourseSectionManagementTest extends TestCase
             ->assertViewHas('courseSections', fn ($courseSections): bool => $courseSections->perPage() === 10
                 && $courseSections->total() === 12
                 && $courseSections->count() === 10);
+    }
+
+    public function test_course_section_can_be_created_with_an_active_academic_period_and_relationships_are_available(): void
+    {
+        $course = Course::query()->create(['code' => 'CS420', 'name' => 'Pemrograman Web']);
+        $academicPeriod = $this->createAcademicPeriod();
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->actingAs($admin)->post(route('course-sections.store'), [
+            'course_id' => $course->id,
+            'academic_period_id' => $academicPeriod->id,
+            'name' => 'Kelas Relasi',
+            'academic_year' => '2026/2027',
+            'semester' => 'ganjil',
+        ])->assertRedirectToRoute('course-sections.index');
+
+        $courseSection = CourseSection::query()->latest('id')->firstOrFail();
+
+        $this->assertTrue($courseSection->academicPeriod->is($academicPeriod));
+        $this->assertTrue($academicPeriod->courseSections->contains($courseSection));
+    }
+
+    public function test_inactive_academic_period_is_rejected_for_new_course_sections(): void
+    {
+        $course = Course::query()->create(['code' => 'CS421', 'name' => 'Basis Data']);
+        $academicPeriod = $this->createAcademicPeriod(['is_active' => false]);
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $response = $this->actingAs($admin)
+            ->from(route('course-sections.create'))
+            ->post(route('course-sections.store'), [
+                'course_id' => $course->id,
+                'academic_period_id' => $academicPeriod->id,
+                'name' => 'Kelas Ditolak',
+                'academic_year' => '2026/2027',
+                'semester' => 'ganjil',
+            ]);
+
+        $response->assertRedirectToRoute('course-sections.create')
+            ->assertSessionHasErrors('academic_period_id');
+        $this->assertDatabaseMissing('course_sections', ['name' => 'Kelas Ditolak']);
+    }
+
+    public function test_existing_course_section_keeps_an_inactive_academic_period(): void
+    {
+        $course = Course::query()->create(['code' => 'CS422', 'name' => 'Sistem Operasi']);
+        $academicPeriod = $this->createAcademicPeriod(['is_active' => false]);
+        $courseSection = CourseSection::query()->create([
+            'course_id' => $course->id,
+            'academic_period_id' => $academicPeriod->id,
+            'name' => 'Kelas Lama',
+            'academic_year' => '2026/2027',
+            'semester' => 'ganjil',
+        ]);
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->actingAs($admin)->get(route('course-sections.edit', $courseSection))
+            ->assertOk()
+            ->assertSee($academicPeriod->name, false)
+            ->assertSee('value="'.$academicPeriod->id.'" selected', false);
+
+        $this->assertDatabaseHas('course_sections', [
+            'id' => $courseSection->id,
+            'academic_period_id' => $academicPeriod->id,
+        ]);
+    }
+
+    public function test_course_section_index_renders_attendance_session_link(): void
+    {
+        $course = Course::query()->create(['code' => 'CS423', 'name' => 'Jaringan Komputer']);
+        $period = $this->createAcademicPeriod();
+        $section = CourseSection::query()->create([
+            'course_id' => $course->id,
+            'academic_period_id' => $period->id,
+            'name' => 'Kelas TI-3A',
+            'academic_year' => '2026/2027',
+            'semester' => 'ganjil',
+            'is_active' => true,
+        ]);
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $response = $this->actingAs($admin)->get(route('course-sections.index'));
+
+        $response->assertOk()
+            ->assertSeeText('Absensi')
+            ->assertSee(route('course-sections.attendance-sessions.index', $section), false);
+    }
+
+    public function test_admin_can_filter_course_sections_by_academic_period_course_lecturer_and_section(): void
+    {
+        $activePeriod = $this->createAcademicPeriod([
+            'name' => 'Semester Ganjil 2026/2027',
+            'academic_year' => '2026/2027',
+            'semester' => 'ganjil',
+            'is_active' => true,
+        ]);
+
+        $oldPeriod = $this->createAcademicPeriod([
+            'name' => 'Semester Genap 2025/2026',
+            'academic_year' => '2025/2026',
+            'semester' => 'genap',
+            'starts_on' => '2026-02-01',
+            'ends_on' => '2026-07-31',
+            'is_active' => false,
+        ]);
+
+        $courseA = Course::query()->create(['code' => 'IF501', 'name' => 'Pemrograman IoT']);
+        $courseB = Course::query()->create(['code' => 'IF502', 'name' => 'Visi Komputer']);
+
+        $lecturerA = User::factory()->create(['role' => 'dosen', 'name' => 'Dosen Alpha']);
+        $lecturerB = User::factory()->create(['role' => 'dosen', 'name' => 'Dosen Beta']);
+
+        $sectionActive = CourseSection::query()->create([
+            'course_id' => $courseA->id,
+            'academic_period_id' => $activePeriod->id,
+            'name' => 'TI-3A Aktif',
+            'academic_year' => '2026/2027',
+            'semester' => 'ganjil',
+            'is_active' => true,
+        ]);
+        $sectionActive->lecturers()->create([
+            'user_id' => $lecturerA->id,
+            'teaching_type' => 'teori',
+        ]);
+        $sectionActive->schedules()->create([
+            'session_type' => 'teori',
+            'delivery_mode' => 'onsite',
+            'day_of_week' => 1,
+            'starts_at' => '08:00',
+            'ends_at' => '10:00',
+            'timezone' => 'Asia/Jakarta',
+            'location' => 'Lab IoT 301',
+            'is_active' => true,
+        ]);
+
+        $sectionOld = CourseSection::query()->create([
+            'course_id' => $courseB->id,
+            'academic_period_id' => $oldPeriod->id,
+            'name' => 'TI-2B Lama',
+            'academic_year' => '2025/2026',
+            'semester' => 'genap',
+            'is_active' => true,
+        ]);
+        $sectionOld->lecturers()->create([
+            'user_id' => $lecturerB->id,
+            'teaching_type' => 'praktikum',
+        ]);
+
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        // 1. Default view uses active academic period and displays schedule/lecturer columns
+        $this->actingAs($admin)->get(route('course-sections.index'))
+            ->assertOk()
+            ->assertSeeText('TI-3A Aktif')
+            ->assertSeeText('Dosen Alpha')
+            ->assertSeeText('Senin')
+            ->assertSeeText('08:00 - 10:00')
+            ->assertSeeText('Lab IoT 301')
+            ->assertDontSeeText('TI-2B Lama');
+
+        // 2. Filtering by old academic period shows old semester section
+        $this->actingAs($admin)->get(route('course-sections.index', ['academic_period_id' => $oldPeriod->id]))
+            ->assertOk()
+            ->assertSeeText('TI-2B Lama')
+            ->assertSeeText('Dosen Beta')
+            ->assertDontSeeText('TI-3A Aktif');
+
+        // 3. Filtering by 'all' academic periods and lecturer_id
+        $this->actingAs($admin)->get(route('course-sections.index', [
+            'academic_period_id' => 'all',
+            'lecturer_id' => $lecturerB->id,
+        ]))
+            ->assertOk()
+            ->assertSeeText('TI-2B Lama')
+            ->assertDontSeeText('TI-3A Aktif');
+
+        // 4. Filtering by course_id and course_section_id
+        $this->actingAs($admin)->get(route('course-sections.index', [
+            'academic_period_id' => 'all',
+            'course_id' => $courseA->id,
+            'course_section_id' => $sectionActive->id,
+        ]))
+            ->assertOk()
+            ->assertSeeText('TI-3A Aktif')
+            ->assertDontSeeText('TI-2B Lama');
+    }
+
+    public function test_course_section_show_displays_enrolled_students_summary_search_and_ten_per_page_pagination(): void
+    {
+        $course = Course::query()->create(['code' => 'IF510', 'name' => 'Pemrograman Jaringan']);
+        $courseSection = CourseSection::query()->create([
+            'course_id' => $course->id,
+            'name' => 'Kelas TI-3B',
+            'academic_year' => '2026/2027',
+            'semester' => 'ganjil',
+        ]);
+
+        foreach (range(1, 12) as $index) {
+            $student = User::factory()->create([
+                'name' => sprintf('Mahasiswa Peserta %02d', $index),
+                'nim' => sprintf('2026510%03d', $index),
+                'role' => 'mahasiswa',
+                'is_active' => true,
+            ]);
+
+            $courseSection->enrollments()->create([
+                'student_id' => $student->id,
+                'status' => 'aktif',
+            ]);
+        }
+
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        // 1. Halaman 1 menampilkan ringkasan 12 mahasiswa terdaftar dan maksimal 10 mahasiswa per halaman
+        $pageOneResponse = $this->actingAs($admin)->get(route('course-sections.show', $courseSection));
+
+        $pageOneResponse
+            ->assertOk()
+            ->assertSee('data-enrollment-summary', false)
+            ->assertSee('data-enrollment-pagination', false)
+            ->assertSeeText('12 Mahasiswa Terdaftar')
+            ->assertSeeText('Mahasiswa Peserta 01')
+            ->assertSeeText('Mahasiswa Peserta 10')
+            ->assertDontSeeText('Mahasiswa Peserta 11')
+            ->assertDontSeeText('Mahasiswa Peserta 12')
+            ->assertViewHas('totalEnrolledCount', 12)
+            ->assertViewHas('enrollments', fn ($enrollments): bool => $enrollments->perPage() === 10
+                && $enrollments->total() === 12
+                && $enrollments->count() === 10);
+
+        // 2. Halaman 2 menampilkan sisa 2 mahasiswa
+        $this->actingAs($admin)->get(route('course-sections.show', [
+            'courseSection' => $courseSection,
+            'page' => 2,
+        ]))
+            ->assertOk()
+            ->assertSeeText('12 Mahasiswa Terdaftar')
+            ->assertSeeText('Mahasiswa Peserta 11')
+            ->assertSeeText('Mahasiswa Peserta 12')
+            ->assertDontSeeText('Mahasiswa Peserta 01')
+            ->assertViewHas('enrollments', fn ($enrollments): bool => $enrollments->count() === 2);
+
+        // 3. Pencarian berdasarkan nama atau NIM memfilter daftar dan tetap menampilkan jumlah total terdaftar
+        $this->actingAs($admin)->get(route('course-sections.show', [
+            'courseSection' => $courseSection,
+            'student_search' => '2026510011',
+        ]))
+            ->assertOk()
+            ->assertSeeText('12 Mahasiswa Terdaftar')
+            ->assertSeeText('1 sesuai pencarian')
+            ->assertSeeText('Mahasiswa Peserta 11')
+            ->assertDontSeeText('Mahasiswa Peserta 01')
+            ->assertViewHas('totalEnrolledCount', 12)
+            ->assertViewHas('enrollments', fn ($enrollments): bool => $enrollments->total() === 1);
+
+        // 4. Pencarian yang tidak cocok menampilkan pesan kosong yang sesuai
+        $this->actingAs($admin)->get(route('course-sections.show', [
+            'courseSection' => $courseSection,
+            'student_search' => 'TIDAK-ADA-999',
+        ]))
+            ->assertOk()
+            ->assertSeeText('12 Mahasiswa Terdaftar')
+            ->assertSeeText('0 sesuai pencarian')
+            ->assertSeeText('Tidak ada mahasiswa terdaftar yang sesuai pencarian.');
+    }
+
+    /**
+     * @param  array<string, mixed>  $overrides
+     */
+    private function createAcademicPeriod(array $overrides = []): AcademicPeriod
+    {
+        return AcademicPeriod::query()->create(array_merge([
+            'name' => 'Semester Ganjil 2026/2027',
+            'academic_year' => '2026/2027',
+            'semester' => 'ganjil',
+            'starts_on' => '2026-08-01',
+            'ends_on' => '2027-01-31',
+            'ats_starts_on' => '2026-10-05',
+            'ats_ends_on' => '2026-10-16',
+            'uas_starts_on' => '2027-01-11',
+            'uas_ends_on' => '2027-01-22',
+            'replacement_deadline' => '2027-01-29',
+            'is_active' => true,
+        ], $overrides));
     }
 }

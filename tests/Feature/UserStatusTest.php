@@ -31,7 +31,7 @@ class UserStatusTest extends TestCase
         $admin = User::factory()->create(['role' => UserRole::Admin->value]);
         $user = User::factory()->create([
             'email' => null,
-            'nidn' => '001234',
+            'nidn' => '0012345678',
             'nim' => null,
             'role' => UserRole::Dosen->value,
         ]);
@@ -45,7 +45,7 @@ class UserStatusTest extends TestCase
         $this->assertDatabaseHas('users', [
             'id' => $user->id,
             'is_active' => false,
-            'nidn' => '001234',
+            'nidn' => '0012345678',
             'role' => UserRole::Dosen->value,
         ]);
         $this->assertModelExists($user);
@@ -67,7 +67,7 @@ class UserStatusTest extends TestCase
         $admin = User::factory()->create(['role' => UserRole::Admin->value]);
         $user = User::factory()->create([
             'email' => null,
-            'nidn' => '001234',
+            'nidn' => '0012345678',
             'is_active' => false,
             'role' => UserRole::Dosen->value,
             'password' => 'password',
@@ -80,7 +80,7 @@ class UserStatusTest extends TestCase
 
         $response = $this->post(route('login'), [
             'role' => UserRole::Dosen->value,
-            'identity' => '001234',
+            'identity' => '0012345678',
             'password' => 'password',
         ]);
 
@@ -182,14 +182,14 @@ class UserStatusTest extends TestCase
     {
         $user = User::factory()->create([
             'email' => null,
-            'nidn' => '001234',
+            'nidn' => '0012345678',
             'role' => UserRole::Dosen->value,
             'password' => 'password',
         ]);
 
         $this->post(route('login'), [
             'role' => UserRole::Dosen->value,
-            'identity' => '001234',
+            'identity' => '0012345678',
             'password' => 'password',
         ])->assertRedirectToRoute('dashboard');
 

@@ -40,6 +40,14 @@ class AttendanceRecord extends Model
         return $this->belongsTo(User::class, 'recorded_by');
     }
 
+    /**
+     * Determine if the student is considered present (including late).
+     */
+    public function isPresent(): bool
+    {
+        return in_array($this->status, ['hadir', 'terlambat'], true);
+    }
+
     protected function casts(): array
     {
         return [

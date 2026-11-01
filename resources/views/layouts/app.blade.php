@@ -9,7 +9,7 @@
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="min-h-screen overflow-x-hidden bg-slate-50 text-slate-800 antialiased lg:flex">
+<body class="min-h-screen overflow-x-hidden bg-slate-50 text-slate-800 antialiased @auth lg:flex @endauth">
     @auth
         <div id="sidebar-overlay" class="fixed inset-0 z-30 hidden bg-slate-950/50 lg:hidden" aria-hidden="true"></div>
 
@@ -61,6 +61,25 @@
                             ])
                             @if (request()->routeIs('users.*')) aria-current="page" @endif
                         >Pengguna</a>
+                    @endif
+
+                    @if (auth()->user()->role === \App\Enums\UserRole::Dosen->value)
+                        <a
+                            href="{{ route('course-sections.index') }}"
+                            data-sidebar-link
+                            @class([
+                                'flex items-center rounded-lg px-3 py-2.5 text-sm font-semibold transition',
+                                'bg-blue-50 text-blue-700' => request()->routeIs('course-sections.*'),
+                                'text-slate-600 hover:bg-slate-100 hover:text-slate-900' => ! request()->routeIs('course-sections.*'),
+                            ])
+                            @if (request()->routeIs('course-sections.*')) aria-current="page" @endif
+                        >Kelas Saya</a>
+                    @endif
+                </div>
+
+                @if (auth()->user()->role === \App\Enums\UserRole::Admin->value)
+                    <p class="mt-6 px-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Akademik</p>
+                    <div class="mt-3 space-y-1">
                         <a
                             href="{{ route('courses.index') }}"
                             data-sidebar-link
@@ -81,14 +100,40 @@
                             ])
                             @if (request()->routeIs('course-sections.*')) aria-current="page" @endif
                         >Kelas Mata Kuliah</a>
-                    @endif
-                </div>
+                        <a
+                            href="{{ route('academic-periods.index') }}"
+                            data-sidebar-link
+                            @class([
+                                'flex items-center rounded-lg px-3 py-2.5 text-sm font-semibold transition',
+                                'bg-blue-50 text-blue-700' => request()->routeIs('academic-periods.*'),
+                                'text-slate-600 hover:bg-slate-100 hover:text-slate-900' => ! request()->routeIs('academic-periods.*'),
+                            ])
+                            @if (request()->routeIs('academic-periods.*')) aria-current="page" @endif
+                        >Periode Akademik</a>
+                    </div>
+                @endif
             </nav>
 
-            <div class="shrink-0 border-t border-slate-100 p-4">
+            <div class="shrink-0 border-t border-slate-100 p-4 space-y-3">
+                <div class="rounded-xl bg-slate-50 p-3 border border-slate-100">
+                    <div class="flex items-center justify-between gap-2">
+                        <p class="truncate text-sm font-semibold text-slate-900">{{ auth()->user()->name }}</p>
+                        <span @class([
+                            'shrink-0 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide',
+                            'bg-violet-100 text-violet-800' => auth()->user()->role === \App\Enums\UserRole::Admin->value,
+                            'bg-emerald-100 text-emerald-800' => auth()->user()->role === \App\Enums\UserRole::Dosen->value,
+                            'bg-amber-100 text-amber-800' => auth()->user()->role === \App\Enums\UserRole::Mahasiswa->value,
+                        ])>
+                            {{ auth()->user()->role }}
+                        </span>
+                    </div>
+                    <p class="mt-0.5 truncate text-xs text-slate-500">
+                        {{ auth()->user()->email ?? auth()->user()->nidn ?? auth()->user()->nim }}
+                    </p>
+                </div>
                 <form method="POST" action="{{ route('logout') }}">
                     @csrf
-                    <button type="submit" class="flex w-full items-center rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
+                    <button type="submit" class="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
                         Keluar
                     </button>
                 </form>
@@ -123,7 +168,7 @@
             </footer>
         </div>
     @else
-        <div class="flex min-h-screen flex-col">
+        <div class="flex min-h-screen w-full flex-col">
             <header class="border-b border-slate-200 bg-white">
                 <div class="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
                     <a href="{{ route('login') }}" class="flex items-center gap-3">
@@ -135,7 +180,7 @@
                     </a>
                 </div>
             </header>
-            <main class="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+            <main class="flex w-full max-w-none flex-1 items-center justify-center px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
                 @yield('content')
             </main>
         </div>

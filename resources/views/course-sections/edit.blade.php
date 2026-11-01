@@ -33,6 +33,21 @@
                 </div>
 
                 <div class="space-y-2">
+                    <label for="academic_period_id" class="block text-sm font-medium text-slate-700">Periode akademik</label>
+                    <select id="academic_period_id" name="academic_period_id" required class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15" @error('academic_period_id') aria-invalid="true" aria-describedby="academic_period_id-error" @enderror>
+                        <option value="">Pilih periode akademik</option>
+                        @foreach ($academicPeriods as $academicPeriod)
+                            <option value="{{ $academicPeriod->id }}" @selected((string) old('academic_period_id', $courseSection->academic_period_id) === (string) $academicPeriod->id)>
+                                {{ $academicPeriod->name }} ({{ $academicPeriod->academic_year }} - {{ ucfirst($academicPeriod->semester) }}){{ $academicPeriod->is_active ? '' : ' (Nonaktif)' }}
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('academic_period_id')
+                        <p id="academic_period_id-error" class="text-sm text-red-700">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div class="space-y-2">
                     <label for="name" class="block text-sm font-medium text-slate-700">Nama kelas</label>
                     <input id="name" name="name" type="text" value="{{ old('name', $courseSection->name) }}" maxlength="255" required autofocus class="block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15" @error('name') aria-invalid="true" aria-describedby="name-error" @enderror>
                     @error('name')

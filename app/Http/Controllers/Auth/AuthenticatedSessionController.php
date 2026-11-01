@@ -28,6 +28,10 @@ class AuthenticatedSessionController extends Controller
                 'string',
                 'max:255',
                 Rule::when($request->input('role') === UserRole::Admin->value, ['email']),
+                Rule::when(
+                    in_array($request->input('role'), [UserRole::Dosen->value, UserRole::Mahasiswa->value], true),
+                    ['regex:/\A[0-9]{10}\z/']
+                ),
             ],
             'password' => ['required', 'string'],
             'remember' => ['sometimes', 'boolean'],
@@ -39,6 +43,12 @@ class AuthenticatedSessionController extends Controller
             UserRole::Dosen => 'nidn',
             UserRole::Mahasiswa => 'nim',
         };
+
+        if (Auth::check()) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
 
         if (! Auth::attempt(
             [
@@ -67,6 +77,10 @@ class AuthenticatedSessionController extends Controller
         }
 
         $request->session()->regenerate();
+
+        if ($request->user()?->must_change_password) {
+            return redirect()->route('password.first-change');
+        }
 
         return redirect()->intended(route('dashboard'));
     }

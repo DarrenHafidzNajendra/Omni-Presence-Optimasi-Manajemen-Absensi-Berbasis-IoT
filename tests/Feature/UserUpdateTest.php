@@ -15,7 +15,7 @@ class UserUpdateTest extends TestCase
 
     public function test_admin_can_open_edit_form_with_current_values_and_without_password(): void
     {
-        $user = $this->createUserForRole(UserRole::Dosen, 'nidn', '001234');
+        $user = $this->createUserForRole(UserRole::Dosen, 'nidn', '0012345678');
         $admin = User::factory()->create(['role' => UserRole::Admin->value]);
 
         $response = $this->actingAs($admin)->get(route('users.edit', $user));
@@ -25,7 +25,7 @@ class UserUpdateTest extends TestCase
             ->assertSee('name="name"', false)
             ->assertSee('value="'.$user->name.'"', false)
             ->assertSee('value="dosen" selected', false)
-            ->assertSee('value="001234"', false)
+            ->assertSee('value="0012345678"', false)
             ->assertSee('name="password"', false)
             ->assertSee('name="password_confirmation"', false)
             ->assertSeeText('Simpan Perubahan')
@@ -40,7 +40,7 @@ class UserUpdateTest extends TestCase
     {
         return [
             'admin email' => [UserRole::Admin, 'email', 'old-admin@example.com', 'new-admin@example.com'],
-            'dosen NIDN' => [UserRole::Dosen, 'nidn', '001234', '009876'],
+            'dosen NIDN' => [UserRole::Dosen, 'nidn', '0012345678', '0098765432'],
             'mahasiswa NIM' => [UserRole::Mahasiswa, 'nim', '0012345678', '0098765432'],
         ];
     }
@@ -78,7 +78,7 @@ class UserUpdateTest extends TestCase
     {
         return [
             'admin email' => [UserRole::Admin, 'email', 'same-admin@example.com'],
-            'dosen NIDN' => [UserRole::Dosen, 'nidn', '001234'],
+            'dosen NIDN' => [UserRole::Dosen, 'nidn', '0012345678'],
             'mahasiswa NIM' => [UserRole::Mahasiswa, 'nim', '0012345678'],
         ];
     }
@@ -112,7 +112,7 @@ class UserUpdateTest extends TestCase
     {
         return [
             'admin email' => [UserRole::Admin, 'email', 'admin-one@example.com', UserRole::Admin, 'email', 'admin-two@example.com'],
-            'dosen NIDN' => [UserRole::Dosen, 'nidn', '001234', UserRole::Dosen, 'nidn', '009876'],
+            'dosen NIDN' => [UserRole::Dosen, 'nidn', '0012345678', UserRole::Dosen, 'nidn', '0098765432'],
             'mahasiswa NIM' => [UserRole::Mahasiswa, 'nim', '0012345678', UserRole::Mahasiswa, 'nim', '0098765432'],
         ];
     }
@@ -145,7 +145,7 @@ class UserUpdateTest extends TestCase
 
     public function test_changing_role_clears_identities_that_do_not_apply_to_the_new_role(): void
     {
-        $user = $this->createUserForRole(UserRole::Dosen, 'nidn', '001234');
+        $user = $this->createUserForRole(UserRole::Dosen, 'nidn', '0012345678');
         $admin = User::factory()->create(['role' => UserRole::Admin->value]);
 
         $response = $this->actingAs($admin)->put(route('users.update', $user), [
@@ -170,10 +170,10 @@ class UserUpdateTest extends TestCase
     public static function invalidRoleIdentities(): array
     {
         return [
-            'NIDN too short' => [UserRole::Dosen, 'nidn', '12345'],
-            'NIDN too long' => [UserRole::Dosen, 'nidn', '1234567'],
-            'NIDN letters' => [UserRole::Dosen, 'nidn', '12A456'],
-            'NIDN symbols' => [UserRole::Dosen, 'nidn', '12-456'],
+            'NIDN too short' => [UserRole::Dosen, 'nidn', '123456789'],
+            'NIDN too long' => [UserRole::Dosen, 'nidn', '12345678901'],
+            'NIDN letters' => [UserRole::Dosen, 'nidn', '123456789A'],
+            'NIDN symbols' => [UserRole::Dosen, 'nidn', '12345678-0'],
             'NIM too short' => [UserRole::Mahasiswa, 'nim', '123456789'],
             'NIM too long' => [UserRole::Mahasiswa, 'nim', '12345678901'],
             'NIM letters' => [UserRole::Mahasiswa, 'nim', '123456789A'],
@@ -187,7 +187,7 @@ class UserUpdateTest extends TestCase
         string $identityField,
         string $invalidIdentity,
     ): void {
-        $user = $this->createUserForRole($role, $identityField, $role === UserRole::Dosen ? '001234' : '0012345678');
+        $user = $this->createUserForRole($role, $identityField, $role === UserRole::Dosen ? '0012345678' : '0012345678');
         $admin = User::factory()->create(['role' => UserRole::Admin->value]);
 
         $response = $this->actingAs($admin)->from(route('users.edit', $user))->put(route('users.update', $user), [
