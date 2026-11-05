@@ -259,6 +259,14 @@ class UserController extends Controller
             ->orderBy('id')
             ->get(['id', 'course_id', 'name']);
 
+        $userCounts = [
+            'total' => User::count(),
+            'admin' => User::where('role', UserRole::Admin->value)->count(),
+            'dosen' => User::where('role', UserRole::Dosen->value)->count(),
+            'mahasiswa' => User::where('role', UserRole::Mahasiswa->value)->count(),
+            'active' => User::where('is_active', true)->count(),
+        ];
+
         return view('users.index', [
             'users' => $users,
             'search' => $search,
@@ -267,6 +275,7 @@ class UserController extends Controller
             'selectedCourseSectionId' => $selectedCourseSectionId,
             'courseSections' => $courseSections,
             'roles' => $roles,
+            'userCounts' => $userCounts,
         ]);
     }
 }

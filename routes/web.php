@@ -108,3 +108,28 @@ Route::middleware(['auth', 'role:admin,dosen'])->group(function (): void {
         Route::post('/course-sections/{courseSection}/attendance-sessions/{attendanceSession}/records', [AttendanceSessionController::class, 'recordAttendance'])->name('course-sections.attendance-sessions.records.store');
     });
 });
+
+if (app()->environment('local')) {
+    Route::get('/dev/screenshot-form-error', function () {
+        $roles = \App\Enums\UserRole::cases();
+        return view('users.create', [
+            'roles' => $roles,
+        ])->withErrors([
+            'name' => 'Nama pengguna wajib diisi minimal 3 karakter.',
+            'role' => 'Role pengguna wajib dipilih.',
+            'email' => 'Alamat email wajib diisi dengan format email yang valid.',
+        ]);
+    });
+
+    Route::get('/dev/screenshot-view', function (\Illuminate\Http\Request $request) {
+        $role = $request->query('role', 'admin');
+        $target = $request->query('target', '/dashboard');
+        $user = \App\Models\User::where('role', $role)->first();
+        if ($user) {
+            $user->must_change_password = false;
+            $user->save();
+            auth()->login($user);
+        }
+        return redirect($target);
+    });
+}

@@ -34,3 +34,5 @@ boost.json
 /.agents/
 /.claude/
 /.github/skills/
+/docs
+/design-system
